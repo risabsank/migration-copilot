@@ -1,3 +1,8 @@
+"""Compatibility shim for engine models."""
+
+from sdk.engine.models import *  # noqa: F401,F403
+
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
