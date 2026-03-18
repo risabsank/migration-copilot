@@ -1,7 +1,3 @@
-"""Compatibility shim for deterministic decision engine."""
-
-from sdk.engine.rule_engine import * 
-
 from __future__ import annotations
 
 from collections import deque

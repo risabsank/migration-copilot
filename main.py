@@ -46,9 +46,13 @@ def main() -> int:
     print("\n=== RUNBOOK ===")
     print(output.runbook_markdown)
 
-    runbook_path = Path("runbook.md")
-    runbook_path.write_text(output.runbook_markdown, encoding="utf-8")
-    print(f"\nWrote runbook to {runbook_path}")
+    bundle_root = output.artifact_bundle.root
+    print(f"\nGenerated artifact bundle in: {bundle_root}")
+    print(f"- plan: {output.artifact_bundle.plan_json_path}")
+    print(f"- runbook: {output.artifact_bundle.runbook_path}")
+    print(f"- validations: {output.artifact_bundle.validations_path}")
+    print(f"- backfill scripts: {output.artifact_bundle.backfill_dir}")
+    print(f"- transform stubs: {output.artifact_bundle.transforms_dir}")
     return 0
 
 

@@ -1,9 +1,8 @@
 """Compatibility shim for engine models."""
 
-from sdk.engine.models import *  # noqa: F401,F403
-
-
 from __future__ import annotations
+
+from sdk.engine.models import *  # noqa: F401,F403
 
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -44,6 +43,8 @@ class TableProfile:
     row_count: int
     size_gb: float
     has_primary_key: bool
+    primary_key_columns: list[str] = field(default_factory=list)
+    column_names: list[str] = field(default_factory=list)
     estimated_writes_per_minute: int | None = None
     upstream_dependencies: list[str] = field(default_factory=list)
     schema_drift_likelihood: float = 0.0
