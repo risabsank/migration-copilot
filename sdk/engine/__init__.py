@@ -13,6 +13,15 @@ from .models import (
     SourceProfile,
     TableProfile,
 )
+from .validation import (
+    AggregateCheck,
+    SamplingConfig,
+    SamplingStrategy,
+    TableValidationConfig,
+    ValidationOrchestrator,
+    ValidationReport,
+    ValidationThreshold,
+)
 from .rule_engine import DeterministicDecisionEngine
 
 __all__ = [
@@ -25,4 +34,11 @@ __all__ = [
     "ResolvedSpec",
     "SourceProfile",
     "TableProfile",
+    "AggregateCheck",
+    "SamplingConfig",
+    "SamplingStrategy",
+    "TableValidationConfig",
+    "ValidationOrchestrator",
+    "ValidationReport",
+    "ValidationThreshold",
 ]
