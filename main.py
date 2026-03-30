@@ -37,10 +37,16 @@ def main() -> int:
             objects=[o.strip() for o in os.getenv("TABLES", "").split(",") if o.strip()],
             downtime_minutes=int(os.getenv("DOWNTIME_MINUTES", "5")),
             policy_profile=PolicyProfile.CONSERVATIVE,
+            source_of_truth=os.getenv("SOURCE_OF_TRUTH", "database"),
         )
 
-        output = copilot.plan(spec=spec, schema=os.getenv("SOURCE_SCHEMA", "public"), cdc_supported=True)
-
+        output = copilot.plan(
+            spec=spec,
+            schema=os.getenv("SOURCE_SCHEMA", "public"),
+            cdc_supported=True,
+            cdc_log_mode=os.getenv("CDC_LOG_MODE", "wal"),
+        )
+    
     print("=== RESOLVED PLAN JSON ===")
     print(json.dumps(output.result.as_dict(), indent=2))
     print("\n=== RUNBOOK ===")

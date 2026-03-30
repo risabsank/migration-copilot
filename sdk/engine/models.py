@@ -35,6 +35,7 @@ class MigrationSpec:
     downtime_minutes: int | None = None
     policy_profile: PolicyProfile = PolicyProfile.CONSERVATIVE
     low_bandwidth_mode: bool = False
+    source_of_truth: str = "database"
 
 
 @dataclass(frozen=True)
@@ -48,12 +49,14 @@ class TableProfile:
     estimated_writes_per_minute: int | None = None
     upstream_dependencies: list[str] = field(default_factory=list)
     schema_drift_likelihood: float = 0.0
+    domain: str | None = None
 
 
 @dataclass(frozen=True)
 class SourceProfile:
     tables: list[TableProfile]
     cdc_supported: bool
+    cdc_log_mode: str | None = None
 
     def by_name(self) -> dict[str, TableProfile]:
         return {table.name: table for table in self.tables}
@@ -67,6 +70,23 @@ class ResolvedTablePlan:
     execution_order: int
     assumptions: list[str] = field(default_factory=list)
 
+@dataclass(frozen=True)
+class CDCPlan:
+    ready: bool
+    log_mode: str
+    lag_gate_seconds: int
+    lag_stabilization_minutes: int
+    reprocessing_strategy: str
+    dedupe_strategy: str
+    prerequisites: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class StreamingReplayPlan:
+    enabled: bool
+    source_topic_pattern: str
+    projection_rebuild_strategy: str
+    cutover_gate: str
 
 @dataclass(frozen=True)
 class RiskItem:
@@ -85,6 +105,11 @@ class ResolvedSpec:
     confirm_with_team: list[str]
     decision_log: list[str]
     risks: list[RiskItem]
+    plan_variants: list[str]
+    selected_variant: str
+    cdc_plan: CDCPlan
+    streaming_replay_plan: StreamingReplayPlan | None = None
+    phased_cutover_groups: list[list[str]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

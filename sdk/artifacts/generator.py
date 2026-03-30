@@ -51,6 +51,7 @@ class ArtifactBundleGenerator:
                         "downtime_minutes": spec.downtime_minutes,
                         "policy_profile": spec.policy_profile.value,
                         "low_bandwidth_mode": spec.low_bandwidth_mode,
+                        "source_of_truth": spec.source_of_truth,
                     },
                     "result": result.as_dict(),
                 },
@@ -186,9 +187,13 @@ class ArtifactBundleGenerator:
                 "connector: TODO",
                 f"primary_key: {pk_value}",
                 "watermark_column: TODO",
-                "lag_gate_seconds: 60",
+                "lag_gate_seconds: 30",
+                "lag_stabilization_minutes: 30",
+                "reprocessing_strategy: replay_from_checkpoint_then_idempotent_upsert",
+                "dedupe_strategy: merge_on_pk_with_event_timestamp_tiebreaker",
                 "notes:",
-                "  - Generated stub. Fill connector-specific fields before enabling.",
+                "  - Generated CDC template; fill connector-specific fields before enabling.",
+                "  - Requires WAL/binlog enabled and PK/surrogate key for deterministic dedupe.",
                 "",
             ]
         )

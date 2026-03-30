@@ -30,6 +30,7 @@ class MigrationCopilot:
         spec: MigrationSpec,
         schema: str = "public",
         cdc_supported: bool = True,
+        cdc_log_mode: str | None = "wal",
         output_dir: str | Path = "artifacts",
     ) -> PlanOutput:
         table_names = self._metadata_adapter.list_tables(schema=schema)
@@ -50,7 +51,7 @@ class MigrationCopilot:
                 )
             )
 
-        source = SourceProfile(tables=table_profiles, cdc_supported=cdc_supported)
+        source = SourceProfile(tables=table_profiles, cdc_supported=cdc_supported, cdc_log_mode=cdc_log_mode)
         result = self._engine.build(spec, source)
         runbook = _render_runbook(result)
 
@@ -69,10 +70,21 @@ def _render_runbook(result: EngineResult) -> str:
         "# Migration Runbook",
         "",
         f"Pattern: **{result.plan.pattern.value}**",
+        f"Selected plan variant: **{result.resolved_spec.selected_variant}**",
         f"Confidence: **{result.resolved_spec.confidence}**",
         "",
-        "## Steps",
+        "## Available Plan Variants",
     ]
+
+    for variant in result.resolved_spec.plan_variants:
+        lines.append(f"- {variant}")
+
+    lines.extend(
+        [
+            "",
+            "## Steps",
+        ]
+    )
 
     for step in result.plan.steps:
         deps = ", ".join(step.depends_on) if step.depends_on else "none"
@@ -85,17 +97,48 @@ def _render_runbook(result: EngineResult) -> str:
             f"{table_plan.execution_order}. Backfill **{table_plan.table_name}** in chunks of "
             f"**{table_plan.chunk_size_rows}** rows."
         )
+    
+    lines.append("")
+    lines.append("## CDC Sync Plan")
+    cdc_plan = result.resolved_spec.cdc_plan
+    lines.append(f"- CDC readiness: **{'ready' if cdc_plan.ready else 'not ready'}**")
+    lines.append(f"- Log mode: **{cdc_plan.log_mode}**")
+    lines.append(f"- Lag gate: replication lag <= **{cdc_plan.lag_gate_seconds}s**")
+    lines.append(f"- Stabilization window: **{cdc_plan.lag_stabilization_minutes} minutes**")
+    lines.append(f"- Reprocessing strategy: {cdc_plan.reprocessing_strategy}")
+    lines.append(f"- Dedupe strategy: {cdc_plan.dedupe_strategy}")
+    if cdc_plan.prerequisites:
+        lines.append("- Readiness prerequisites:")
+        for item in cdc_plan.prerequisites:
+            lines.append(f"  - {item}")
 
     lines.append("")
     lines.append("## Sync + Validation Gates")
     if result.resolved_spec.requires_cdc:
         lines.append("- Start CDC/incremental sync after initial backfill.")
-        lines.append("- Gate 1: replication lag remains below agreed SLO for at least 30 minutes.")
+        lines.append(
+            f"- Gate 1: replication lag remains <= {cdc_plan.lag_gate_seconds}s for {cdc_plan.lag_stabilization_minutes} minutes."
+        )
         lines.append("- Gate 2: validation queries in `validations.sql` show zero critical deltas.")
     else:
         lines.append("- CDC is optional for this pattern; run incrementals only if needed.")
         lines.append("- Validation gate: all `validations.sql` checks must pass before cutover.")
 
+    if result.resolved_spec.phased_cutover_groups:
+        lines.append("")
+        lines.append("## Phased Cutover Groups")
+        for idx, group in enumerate(result.resolved_spec.phased_cutover_groups, start=1):
+            lines.append(f"- Wave {idx}: {', '.join(group)}")
+
+    if result.resolved_spec.streaming_replay_plan is not None:
+        streaming = result.resolved_spec.streaming_replay_plan
+        lines.append("")
+        lines.append("## Streaming/Event Replay Plan")
+        lines.append(f"- Enabled: **{streaming.enabled}**")
+        lines.append(f"- Topic pattern: `{streaming.source_topic_pattern}`")
+        lines.append(f"- Projection rebuild: {streaming.projection_rebuild_strategy}")
+        lines.append(f"- Cutover gate: {streaming.cutover_gate}")
+    
     lines.append("")
     lines.append("## Cutover Checklist")
     lines.append("- Freeze schema changes in source system.")
