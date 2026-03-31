@@ -5,8 +5,8 @@ from pathlib import Path
 
 from sdk.adapters.contracts import MetadataAdapter
 from sdk.artifacts.generator import ArtifactBundle, ArtifactBundleGenerator
-from sdk.engine.models import EngineResult, MigrationSpec, SourceProfile, TableProfile
 from sdk.engine.ai_agents import MultiAgentDecisionEngine
+from sdk.engine.models import EngineResult, MigrationSpec, SourceProfile, TableProfile
 from sdk.observability import EventCollector, PlanEvent
 
 
