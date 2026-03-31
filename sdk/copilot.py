@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 from pathlib import Path
 
 from sdk.adapters.contracts import MetadataAdapter
 from sdk.artifacts.generator import ArtifactBundle, ArtifactBundleGenerator
 from sdk.engine.models import EngineResult, MigrationSpec, SourceProfile, TableProfile
 from sdk.engine.rule_engine import DeterministicDecisionEngine
+from sdk.observability import EventCollector, PlanEvent
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,9 @@ class PlanOutput:
     result: EngineResult
     runbook_markdown: str
     artifact_bundle: ArtifactBundle
-
+    plan_id: str
+    events: list[PlanEvent]
+    events_path: Path
 
 class MigrationCopilot:
     """Facade for host apps: adapter-driven discovery + deterministic planning."""
@@ -32,7 +34,20 @@ class MigrationCopilot:
         cdc_supported: bool = True,
         cdc_log_mode: str | None = "wal",
         output_dir: str | Path = "artifacts",
+        plan_id: str | None = None,
     ) -> PlanOutput:
+        collector = EventCollector(plan_id=plan_id)
+        collector.emit(
+            step="intake_spec_builder",
+            status="completed",
+            rule_ids=["default_policy_profile", "default_plan_only_mode"],
+            payload={
+                "source_type": spec.source_type,
+                "target_type": spec.target_type,
+                "object_count": len(spec.objects),
+            },
+        )
+
         table_names = self._metadata_adapter.list_tables(schema=schema)
         selected_tables = [name for name in table_names if not spec.objects or name in spec.objects]
 
@@ -50,10 +65,43 @@ class MigrationCopilot:
                     upstream_dependencies=[fk.references_table for fk in table_meta.foreign_keys],
                 )
             )
+        
+        collector.emit(
+            step="discovery_profiler",
+            status="completed",
+            rule_ids=["metadata_adapter_list_tables", "metadata_adapter_describe_table"],
+            payload={"schema": schema, "discovered_tables": table_names, "selected_tables": selected_tables},
+        )
 
         source = SourceProfile(tables=table_profiles, cdc_supported=cdc_supported, cdc_log_mode=cdc_log_mode)
         result = self._engine.build(spec, source)
+
+        collector.emit(
+            step="constraint_resolver",
+            status="completed",
+            rule_ids=[
+                "downtime_rules",
+                "cdc_readiness_rules",
+                "chunk_size_rules",
+                "fk_order_rules",
+            ],
+            confidence=result.resolved_spec.confidence,
+            payload={
+                "selected_variant": result.resolved_spec.selected_variant,
+                "pattern": result.plan.pattern.value,
+                "risk_count": len(result.resolved_spec.risks),
+            },
+        )
+        collector.emit(
+            step="strategy_planner",
+            status="completed",
+            rule_ids=["plan_dag_builder", "rollback_criteria_rules"],
+            confidence=result.resolved_spec.confidence,
+            payload={"step_count": len(result.plan.steps)},
+        )
+
         runbook = _render_runbook(result)
+        collector.emit(step="explainer_auditor", status="completed", rule_ids=["runbook_renderer"])
 
         artifact_bundle = self._bundle_generator.generate(
             output_dir=output_dir,
@@ -62,8 +110,23 @@ class MigrationCopilot:
             runbook_markdown=runbook,
             tables=table_profiles,
         )
-        return PlanOutput(result=result, runbook_markdown=runbook, artifact_bundle=artifact_bundle)
 
+        collector.emit(
+            step="artifact_generator",
+            status="completed",
+            rule_ids=["bundle_templates", "validation_sql_templates", "cdc_config_templates"],
+            payload={"bundle_root": str(artifact_bundle.root)},
+        )
+        events_path = collector.write_jsonl(artifact_bundle.root / "events.jsonl")
+
+        return PlanOutput(
+            result=result,
+            runbook_markdown=runbook,
+            artifact_bundle=artifact_bundle,
+            plan_id=collector.plan_id,
+            events=collector.events,
+            events_path=events_path,
+        )
 
 def _render_runbook(result: EngineResult) -> str:
     lines = [

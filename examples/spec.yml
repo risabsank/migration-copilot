@@ -1,0 +1,41 @@
+plan_id: demo-plan-001
+source_type: postgres
+target_type: snowflake
+schema: public
+objects:
+  - customers
+  - orders
+downtime_minutes: 5
+policy_profile: conservative
+cdc_supported: true
+cdc_log_mode: wal
+tables:
+  - name: customers
+    row_estimate: 1200000
+    size_bytes_estimate: 2147483648
+    primary_key_columns: [id]
+    columns:
+      - name: id
+        data_type: bigint
+        nullable: false
+      - name: email
+        data_type: text
+        nullable: false
+  - name: orders
+    row_estimate: 53000000
+    size_bytes_estimate: 21474836480
+    primary_key_columns: [id]
+    foreign_keys:
+      - column: customer_id
+        references_table: customers
+        references_column: id
+    columns:
+      - name: id
+        data_type: bigint
+        nullable: false
+      - name: customer_id
+        data_type: bigint
+        nullable: false
+      - name: amount
+        data_type: numeric
+        nullable: false

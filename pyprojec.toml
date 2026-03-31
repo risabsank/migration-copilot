@@ -1,12 +1,25 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "migration-copilot"
-version = "0.1.0"
-description = "Deterministic migration planning SDK"
+version = "0.6.0"
+description = "Deterministic migration planning SDK with artifact packaging"
+readme = "scope.md"
 requires-python = ">=3.10"
+dependencies = [
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+migration-copilot = "sdk.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["sdk*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

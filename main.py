@@ -59,6 +59,8 @@ def main() -> int:
     print(f"- validations: {output.artifact_bundle.validations_path}")
     print(f"- backfill scripts: {output.artifact_bundle.backfill_dir}")
     print(f"- transform stubs: {output.artifact_bundle.transforms_dir}")
+    print(f"- events log: {output.events_path}")
+    print(f"Plan ID: {output.plan_id}")
     return 0
 
 
