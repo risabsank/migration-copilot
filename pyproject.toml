@@ -4,11 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "migration-copilot"
-version = "0.6.0"
+version = "0.7.0"
 description = "Deterministic migration planning SDK with artifact packaging"
-readme = "scope.md"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+yaml = [
   "PyYAML>=6.0",
 ]
 
