@@ -110,6 +110,8 @@ class ResolvedSpec:
     cdc_plan: CDCPlan
     streaming_replay_plan: StreamingReplayPlan | None = None
     phased_cutover_groups: list[list[str]] = field(default_factory=list)
+    ai_primary: bool = False
+    ai_agent_notes: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

@@ -6,7 +6,7 @@ from pathlib import Path
 from sdk.adapters.contracts import MetadataAdapter
 from sdk.artifacts.generator import ArtifactBundle, ArtifactBundleGenerator
 from sdk.engine.models import EngineResult, MigrationSpec, SourceProfile, TableProfile
-from sdk.engine.rule_engine import DeterministicDecisionEngine
+from sdk.engine.ai_agents import MultiAgentDecisionEngine
 from sdk.observability import EventCollector, PlanEvent
 
 
@@ -20,11 +20,11 @@ class PlanOutput:
     events_path: Path
 
 class MigrationCopilot:
-    """Facade for host apps: adapter-driven discovery + deterministic planning."""
+    """Facade for host apps: adapter-driven discovery + AI-first planning."""
 
     def __init__(self, metadata_adapter: MetadataAdapter):
         self._metadata_adapter = metadata_adapter
-        self._engine = DeterministicDecisionEngine()
+        self._engine = MultiAgentDecisionEngine()
         self._bundle_generator = ArtifactBundleGenerator()
 
     def plan(
@@ -75,6 +75,29 @@ class MigrationCopilot:
 
         source = SourceProfile(tables=table_profiles, cdc_supported=cdc_supported, cdc_log_mode=cdc_log_mode)
         result = self._engine.build(spec, source)
+
+        collector.emit(
+            step="ai_strategy_agent",
+            status="completed",
+            rule_ids=["llm_strategy_reasoning"],
+            payload={
+                "selected_variant": result.resolved_spec.selected_variant,
+                "ai_primary": result.resolved_spec.ai_primary,
+            },
+        )
+        collector.emit(
+            step="ai_risk_agent",
+            status="completed",
+            rule_ids=["llm_risk_reasoning", "risk_merge_guardrails"],
+            payload={"risk_count": len(result.resolved_spec.risks)},
+        )
+        collector.emit(
+            step="ai_review_agent",
+            status="completed",
+            rule_ids=["llm_review_reasoning", "deterministic_guardrails"],
+            confidence=result.resolved_spec.confidence,
+            payload={"agent_notes": result.resolved_spec.ai_agent_notes},
+        )
 
         collector.emit(
             step="constraint_resolver",
@@ -135,9 +158,21 @@ def _render_runbook(result: EngineResult) -> str:
         f"Pattern: **{result.plan.pattern.value}**",
         f"Selected plan variant: **{result.resolved_spec.selected_variant}**",
         f"Confidence: **{result.resolved_spec.confidence}**",
+        f"AI-first planner: **{'enabled' if result.resolved_spec.ai_primary else 'disabled'}**",
+        "",
+        "## AI Multi-Agent Notes",
+    ]
+
+    if result.resolved_spec.ai_agent_notes:
+        for note in result.resolved_spec.ai_agent_notes:
+            lines.append(f"- {note}")
+    else:
+        lines.append("- No AI agent notes captured.")
+
+    lines.extend([
         "",
         "## Available Plan Variants",
-    ]
+    ])
 
     for variant in result.resolved_spec.plan_variants:
         lines.append(f"- {variant}")

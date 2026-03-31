@@ -23,9 +23,11 @@ from .validation import (
     ValidationThreshold,
 )
 from .rule_engine import DeterministicDecisionEngine
+from .ai_agents import MultiAgentDecisionEngine
 
 __all__ = [
     "DeterministicDecisionEngine",
+    "MultiAgentDecisionEngine",
     "EngineResult",
     "MigrationPattern",
     "MigrationPlan",
