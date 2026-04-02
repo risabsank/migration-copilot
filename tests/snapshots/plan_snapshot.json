@@ -1,0 +1,23 @@
+{
+    "pattern": "backfill_plus_cdc",
+    "rollback": [
+        "Abort if critical validation checks fail.",
+        "Abort if replication lag does not converge before cutover window.",
+        "Abort if schema drift introduces incompatible DDL."
+    ],
+    "selected_variant": "backfill_cdc_sync",
+    "table_plans": [
+        {
+            "chunk": 1000000,
+            "order": 1,
+            "table": "accounts",
+            "wave": 3
+        },
+        {
+            "chunk": 200000,
+            "order": 2,
+            "table": "orders",
+            "wave": 3
+        }
+    ]
+}

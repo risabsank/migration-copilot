@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from sdk.engine.models import *  # noqa: F401,F403
-
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -25,6 +23,11 @@ class RiskLevel(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+class CriticalityTier(str, Enum):
+    TIER0 = "tier0"
+    TIER1 = "tier1"
+    TIER2 = "tier2"
 
 
 @dataclass(frozen=True)
@@ -50,6 +53,7 @@ class TableProfile:
     upstream_dependencies: list[str] = field(default_factory=list)
     schema_drift_likelihood: float = 0.0
     domain: str | None = None
+    criticality: CriticalityTier = CriticalityTier.TIER2
 
 
 @dataclass(frozen=True)
@@ -69,6 +73,8 @@ class ResolvedTablePlan:
     chunk_size_rows: int
     execution_order: int
     assumptions: list[str] = field(default_factory=list)
+    criticality: CriticalityTier = CriticalityTier.TIER2
+    cutover_wave: int = 3
 
 @dataclass(frozen=True)
 class CDCPlan:
@@ -94,6 +100,27 @@ class RiskItem:
     level: RiskLevel
     rationale: str
 
+@dataclass(frozen=True)
+class CostEstimate:
+    estimated_duration_minutes: int
+    peak_parallel_workers: int
+    compute_credits: float
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ComplianceGate:
+    name: str
+    passed: bool
+    detail: str
+
+
+@dataclass(frozen=True)
+class SchemaContractReport:
+    backward_compatibility_score: float
+    breaking_changes: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
 
 @dataclass(frozen=True)
 class ResolvedSpec:
@@ -112,6 +139,10 @@ class ResolvedSpec:
     phased_cutover_groups: list[list[str]] = field(default_factory=list)
     ai_primary: bool = False
     ai_agent_notes: list[str] = field(default_factory=list)
+    estimate: CostEstimate | None = None
+    compliance_gates: list[ComplianceGate] = field(default_factory=list)
+    schema_contract: SchemaContractReport | None = None
+    explainability_trace: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

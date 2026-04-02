@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from sdk.adapters.contracts import ValidationAdapter
+from sdk.engine.models import SchemaContractReport, TableProfile
 
 
 class SamplingStrategy(str, Enum):
@@ -188,3 +189,26 @@ class ValidationOrchestrator:
             )
 
         raise ValueError(f"Unsupported sampling strategy: {sampling.strategy}")
+
+def schema_contract_diff(source_tables: list[TableProfile], target_tables: list[TableProfile]) -> SchemaContractReport:
+    source_map = {t.name: t for t in source_tables}
+    target_map = {t.name: t for t in target_tables}
+    breaking: list[str] = []
+    warnings: list[str] = []
+
+    for name, src in source_map.items():
+        tgt = target_map.get(name)
+        if tgt is None:
+            breaking.append(f"{name}: missing in target schema")
+            continue
+        src_cols = set(src.column_names)
+        tgt_cols = set(tgt.column_names)
+        missing_cols = sorted(src_cols - tgt_cols)
+        if missing_cols:
+            breaking.append(f"{name}: dropped columns {missing_cols}")
+        extra_cols = sorted(tgt_cols - src_cols)
+        if extra_cols:
+            warnings.append(f"{name}: added columns {extra_cols}")
+
+    score = max(0.0, round(1.0 - 0.25 * len(breaking) - 0.05 * len(warnings), 2))
+    return SchemaContractReport(backward_compatibility_score=score, breaking_changes=breaking, warnings=warnings)

@@ -6,7 +6,7 @@ from pathlib import Path
 from sdk.adapters.contracts import MetadataAdapter
 from sdk.artifacts.generator import ArtifactBundle, ArtifactBundleGenerator
 from sdk.engine.ai_agents import MultiAgentDecisionEngine
-from sdk.engine.models import EngineResult, MigrationSpec, SourceProfile, TableProfile
+from sdk.engine.models import CriticalityTier, EngineResult, MigrationSpec, SourceProfile, TableProfile
 from sdk.observability import EventCollector, PlanEvent
 
 
@@ -63,6 +63,7 @@ class MigrationCopilot:
                     primary_key_columns=table_meta.primary_key_columns,
                     column_names=[column.name for column in table_meta.columns],
                     upstream_dependencies=[fk.references_table for fk in table_meta.foreign_keys],
+                    criticality=_infer_criticality(table_meta.table_name),
                 )
             )
         
@@ -238,6 +239,19 @@ def _render_runbook(result: EngineResult) -> str:
         lines.append(f"- Cutover gate: {streaming.cutover_gate}")
     
     lines.append("")
+    lines.append("## Estimate")
+    if result.resolved_spec.estimate is not None:
+        est = result.resolved_spec.estimate
+        lines.append(f"- Duration: **{est.estimated_duration_minutes} minutes**")
+        lines.append(f"- Peak workers: **{est.peak_parallel_workers}**")
+        lines.append(f"- Compute credits: **{est.compute_credits}**")
+
+    lines.append("")
+    lines.append("## Compliance Gates")
+    for gate in result.resolved_spec.compliance_gates:
+        lines.append(f"- {gate.name}: {'PASS' if gate.passed else 'FAIL'} — {gate.detail}")
+    
+    lines.append("")
     lines.append("## Cutover Checklist")
     lines.append("- Freeze schema changes in source system.")
     lines.append("- Confirm latest validation run is successful.")
@@ -258,3 +272,11 @@ def _render_runbook(result: EngineResult) -> str:
         lines.append("- None")
 
     return "\n".join(lines)
+
+def _infer_criticality(table_name: str) -> CriticalityTier:
+    lowered = table_name.lower()
+    if any(token in lowered for token in ["payments", "ledger", "orders"]):
+        return CriticalityTier.TIER0
+    if any(token in lowered for token in ["users", "accounts", "customers"]):
+        return CriticalityTier.TIER1
+    return CriticalityTier.TIER2

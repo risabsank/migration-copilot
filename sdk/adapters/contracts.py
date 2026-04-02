@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,7 @@ class TableMetadata:
     columns: list[ColumnInfo] = field(default_factory=list)
     foreign_keys: list[ForeignKeyInfo] = field(default_factory=list)
 
-
+@runtime_checkable
 class MetadataAdapter(Protocol):
     """Adapter contract required by the SDK to inspect source metadata."""
 
@@ -37,7 +37,7 @@ class MetadataAdapter(Protocol):
     def describe_table(self, table_name: str, schema: str = "public") -> TableMetadata:
         """Return columns, PK/FK metadata, and size estimates for a single table."""
 
-
+@runtime_checkable
 class ValidationAdapter(Protocol):
     """Optional adapter used by the SDK for runtime validations."""
 

@@ -84,6 +84,30 @@ def _validate_spec_doc(spec_doc: dict[str, Any]) -> None:
         raise CliInputError(
             "Spec `objects` must be a non-empty list of tables to migrate."
         )
+    if any(not isinstance(obj, str) or not obj.strip() for obj in objects):
+        raise CliInputError(
+            "Spec `objects` entries must be non-empty table names (strings)."
+        )
+
+    normalized = [obj.strip() for obj in objects]
+    duplicate_objects = sorted({name for name in normalized if normalized.count(name) > 1})
+    if duplicate_objects:
+        raise CliInputError(
+            "Spec `objects` contains duplicates: "
+            f"{', '.join(duplicate_objects)}. Remove duplicates to keep planning deterministic."
+        )
+
+
+def _validate_requested_objects_exist(
+    requested_objects: list[str],
+    available_tables: list[str],
+) -> None:
+    missing = sorted(set(requested_objects) - set(available_tables))
+    if missing:
+        raise CliInputError(
+            "Spec references table(s) that were not present in the provided metadata: "
+            f"{', '.join(missing)}. Add them under `tables` in your spec or remove them from `objects`."
+        )
 
 def _build_migration_spec(spec_doc: dict[str, Any]) -> MigrationSpec:
     _validate_spec_doc(spec_doc)
@@ -119,6 +143,7 @@ def _plan_command(args: argparse.Namespace) -> int:
     migration_spec = _build_migration_spec(spec_doc)
 
     adapter = StaticMetadataAdapter(tables=spec_doc.get("tables", []))
+    _validate_requested_objects_exist(migration_spec.objects, adapter.list_tables(schema=spec_doc.get("schema", "public")))
     copilot = MigrationCopilot(metadata_adapter=adapter)
     output = copilot.plan(
         spec=migration_spec,
