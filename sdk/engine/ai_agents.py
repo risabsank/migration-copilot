@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass, field, replace
 from typing import Protocol
 from urllib import error, request
@@ -45,18 +46,35 @@ class OpenAICompatibleLLMClient:
         self.endpoint = os.getenv("MIGRATION_COPILOT_LLM_ENDPOINT", "").strip()
         self.api_key = os.getenv("MIGRATION_COPILOT_LLM_API_KEY", "").strip()
         self.model = os.getenv("MIGRATION_COPILOT_LLM_MODEL", "gpt-4o-mini")
+        self.timeout_seconds = float(os.getenv("MIGRATION_COPILOT_LLM_TIMEOUT_SECONDS", "20"))
+        self.max_retries = max(0, int(os.getenv("MIGRATION_COPILOT_LLM_MAX_RETRIES", "2")))
+        self.endpoint_type = os.getenv("MIGRATION_COPILOT_LLM_ENDPOINT_TYPE", "auto").strip().lower() or "auto"
+        self.extra_headers = _parse_extra_headers(os.getenv("MIGRATION_COPILOT_LLM_HEADERS", ""))
 
     def is_configured(self) -> bool:
         return bool(self.endpoint and self.api_key)
 
     def complete_json(self, *, system_prompt: str, user_prompt: str, temperature: float = 0.0) -> dict:
-        payload = {"model": self.model, "temperature": temperature, "response_format": {"type": "json_object"}, "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]}
-        req = request.Request(self.endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}, method="POST")
+        payload = _build_payload(
+            endpoint_type=self.endpoint_type,
+            model=self.model,
+            temperature=temperature,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
+        headers.update(self.extra_headers)
 
-        with request.urlopen(req, timeout=20) as response:
-            body = json.loads(response.read().decode("utf-8"))
-
-        return json.loads(body["choices"][0]["message"]["content"])
+        for attempt in range(self.max_retries + 1):
+            req = request.Request(self.endpoint, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+            try:
+                with request.urlopen(req, timeout=self.timeout_seconds) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                return _extract_json_content(body)
+            except (error.URLError, TimeoutError, json.JSONDecodeError, KeyError, ValueError):
+                if attempt >= self.max_retries:
+                    raise
+                time.sleep(0.2 * (attempt + 1))
 
 
 class HeuristicLLMClient:
@@ -175,3 +193,50 @@ def _validate_agent_response(data: dict) -> None:
     for key in required:
         if key not in data:
             raise ValueError(f"LLM response missing required key: {key}")
+
+def _extract_json_content(body: dict) -> dict:
+    if "choices" in body:
+        content = body["choices"][0]["message"]["content"]
+        return json.loads(content)
+    if "output_text" in body:
+        return json.loads(body["output_text"])
+    if "output" in body:
+        for item in body["output"]:
+            if item.get("type") != "message":
+                continue
+            for content in item.get("content", []):
+                if content.get("type") in {"output_text", "text"} and content.get("text"):
+                    return json.loads(content["text"])
+    raise ValueError("Unsupported LLM response body format.")
+
+
+def _build_payload(
+    *,
+    endpoint_type: str,
+    model: str,
+    temperature: float,
+    system_prompt: str,
+    user_prompt: str,
+) -> dict:
+    if endpoint_type == "responses":
+        return {
+            "model": model,
+            "temperature": temperature,
+            "text": {"format": {"type": "json_object"}},
+            "input": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+        }
+    return {
+        "model": model,
+        "temperature": temperature,
+        "response_format": {"type": "json_object"},
+        "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+    }
+
+
+def _parse_extra_headers(raw_headers: str) -> dict[str, str]:
+    if not raw_headers.strip():
+        return {}
+    parsed = json.loads(raw_headers)
+    if not isinstance(parsed, dict):
+        raise ValueError("MIGRATION_COPILOT_LLM_HEADERS must be a JSON object.")
+    return {str(k): str(v) for k, v in parsed.items()}
