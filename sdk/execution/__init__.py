@@ -14,6 +14,15 @@ from sdk.execution.cdc import (
     CDCSyncService,
     FakeCDCAdapter,
 )
+from sdk.execution.cutover import (
+    CutoverEvaluator,
+    CutoverExecutor,
+    CutoverOperationsAdapter,
+    CutoverPolicy,
+    FakeCutoverOperationsAdapter,
+    FakeFinalValidationPackRunner,
+    FinalValidationPackRunner,
+)
 from sdk.execution.sql_backfill import (
     NonRetryableSqlAdapterError,
     RetryableSqlAdapterError,
@@ -34,6 +43,13 @@ __all__ = [
     "CDCStartResult",
     "CDCSyncService",
     "FakeCDCAdapter",
+    "CutoverEvaluator",
+    "CutoverExecutor",
+    "CutoverOperationsAdapter",
+    "CutoverPolicy",
+    "FakeCutoverOperationsAdapter",
+    "FakeFinalValidationPackRunner",
+    "FinalValidationPackRunner",
     "SimulatedBackfillExecutionAdapter",
     "NonRetryableSqlAdapterError",
     "RetryableSqlAdapterError",

@@ -92,6 +92,13 @@ class CDCJobStatus(str, Enum):
     FAILED = "failed"
     STOPPED = "stopped"
 
+class CutoverExecutionStatus(str, Enum):
+    """Lifecycle status for controlled cutover execution."""
+
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 class CDCTableStatus(str, Enum):
     """Table-level CDC progress state."""
@@ -237,6 +244,52 @@ class ValidationSummary:
         }
 
 @dataclass
+class CutoverGateEvaluation:
+    """Persisted cutover gate check result."""
+
+    ready: bool = False
+    blocking_conditions: list[str] = field(default_factory=list)
+    advisory_warnings: list[str] = field(default_factory=list)
+    evaluated_at: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class CutoverExecutionState:
+    """Persisted timeline and checkpoints for cutover sequence execution."""
+
+    status: CutoverExecutionStatus = CutoverExecutionStatus.NOT_STARTED
+    started_at: str | None = None
+    freeze_writes_at: str | None = None
+    final_sync_completed_at: str | None = None
+    final_validation_completed_at: str | None = None
+    completed_at: str | None = None
+    failed_at: str | None = None
+    final_checkpoint: str | None = None
+    operator_notes: list[str] = field(default_factory=list)
+    hook_trace: list[str] = field(default_factory=list)
+    error_message: str | None = None
+    recovery_path: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status.value,
+            "started_at": self.started_at,
+            "freeze_writes_at": self.freeze_writes_at,
+            "final_sync_completed_at": self.final_sync_completed_at,
+            "final_validation_completed_at": self.final_validation_completed_at,
+            "completed_at": self.completed_at,
+            "failed_at": self.failed_at,
+            "final_checkpoint": self.final_checkpoint,
+            "operator_notes": list(self.operator_notes),
+            "hook_trace": list(self.hook_trace),
+            "error_message": self.error_message,
+            "recovery_path": self.recovery_path,
+        }
+
+@dataclass
 class TableExecutionProgress:
     """Mutable state for a table-level migration execution."""
 
@@ -288,7 +341,10 @@ class MigrationRun:
     replication_lag_seconds: float | None = None
     source_freshness_seconds: float | None = None
     replication_checkpoint: str | None = None
+    unresolved_risk_flags: list[str] = field(default_factory=list)
     connector_config_metadata: dict[str, Any] = field(default_factory=dict)
+    cutover_evaluation: CutoverGateEvaluation = field(default_factory=CutoverGateEvaluation)
+    cutover_execution: CutoverExecutionState = field(default_factory=CutoverExecutionState)
 
     @classmethod
     def new(
@@ -386,7 +442,10 @@ class MigrationRun:
             "replication_lag_seconds": self.replication_lag_seconds,
             "source_freshness_seconds": self.source_freshness_seconds,
             "replication_checkpoint": self.replication_checkpoint,
+            "unresolved_risk_flags": self.unresolved_risk_flags,
             "connector_config_metadata": self.connector_config_metadata,
+            "cutover_evaluation": self.cutover_evaluation.as_dict(),
+            "cutover_execution": self.cutover_execution.as_dict(),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -490,7 +549,33 @@ class MigrationRun:
             replication_lag_seconds=data.get("replication_lag_seconds"),
             source_freshness_seconds=data.get("source_freshness_seconds"),
             replication_checkpoint=data.get("replication_checkpoint"),
+            unresolved_risk_flags=list(data.get("unresolved_risk_flags", [])),
             connector_config_metadata=dict(data.get("connector_config_metadata", {})),
+            cutover_evaluation=CutoverGateEvaluation(
+                ready=data.get("cutover_evaluation", {}).get("ready", False),
+                blocking_conditions=list(data.get("cutover_evaluation", {}).get("blocking_conditions", [])),
+                advisory_warnings=list(data.get("cutover_evaluation", {}).get("advisory_warnings", [])),
+                evaluated_at=data.get("cutover_evaluation", {}).get("evaluated_at"),
+            ),
+            cutover_execution=CutoverExecutionState(
+                status=CutoverExecutionStatus(
+                    data.get("cutover_execution", {}).get(
+                        "status",
+                        CutoverExecutionStatus.NOT_STARTED.value,
+                    )
+                ),
+                started_at=data.get("cutover_execution", {}).get("started_at"),
+                freeze_writes_at=data.get("cutover_execution", {}).get("freeze_writes_at"),
+                final_sync_completed_at=data.get("cutover_execution", {}).get("final_sync_completed_at"),
+                final_validation_completed_at=data.get("cutover_execution", {}).get("final_validation_completed_at"),
+                completed_at=data.get("cutover_execution", {}).get("completed_at"),
+                failed_at=data.get("cutover_execution", {}).get("failed_at"),
+                final_checkpoint=data.get("cutover_execution", {}).get("final_checkpoint"),
+                operator_notes=list(data.get("cutover_execution", {}).get("operator_notes", [])),
+                hook_trace=list(data.get("cutover_execution", {}).get("hook_trace", [])),
+                error_message=data.get("cutover_execution", {}).get("error_message"),
+                recovery_path=data.get("cutover_execution", {}).get("recovery_path"),
+            ),
             created_at=data["created_at"],
             updated_at=data["updated_at"],
         )
