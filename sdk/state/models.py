@@ -19,6 +19,8 @@ class MigrationRunStatus(str, Enum):
     PROVISIONING = "provisioning"
     BACKFILLING = "backfilling"
     VALIDATING = "validating"
+    VALIDATION_PASSED = "validation_passed"
+    VALIDATION_FAILED = "validation_failed"
     SYNCING = "syncing"
     CUTOVER_READY = "cutover_ready"
     CUTOVER_COMPLETE = "cutover_complete"
@@ -58,6 +60,88 @@ class ValidationStatus(str, Enum):
     PASSED = "passed"
     FAILED = "failed"
 
+class ValidationCheckStatus(str, Enum):
+    """Execution status for one validation check."""
+
+    PASSED = "passed"
+    FAILED = "failed"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class ValidationCheck:
+    """Result for one executable validation SQL check."""
+
+    check_name: str
+    query: str
+    status: ValidationCheckStatus
+    table_name: str | None = None
+    source_value: float | None = None
+    target_value: float | None = None
+    difference: float | None = None
+    threshold: float = 0.0
+    details: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "check_name": self.check_name,
+            "query": self.query,
+            "status": self.status.value,
+            "table_name": self.table_name,
+            "source_value": self.source_value,
+            "target_value": self.target_value,
+            "difference": self.difference,
+            "threshold": self.threshold,
+            "details": self.details,
+        }
+
+
+@dataclass
+class ValidationResult:
+    """Grouped validation result for a single table."""
+
+    table_name: str
+    checks: list[ValidationCheck] = field(default_factory=list)
+
+    @property
+    def status(self) -> ValidationCheckStatus:
+        statuses = {check.status for check in self.checks}
+        if not statuses:
+            return ValidationCheckStatus.UNKNOWN
+        if ValidationCheckStatus.FAILED in statuses:
+            return ValidationCheckStatus.FAILED
+        if statuses == {ValidationCheckStatus.PASSED}:
+            return ValidationCheckStatus.PASSED
+        return ValidationCheckStatus.UNKNOWN
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "table_name": self.table_name,
+            "status": self.status.value,
+            "checks": [check.as_dict() for check in self.checks],
+        }
+
+
+@dataclass
+class ValidationSummary:
+    """Aggregate validation execution summary at migration level."""
+
+    status: ValidationCheckStatus = ValidationCheckStatus.UNKNOWN
+    total_checks: int = 0
+    passed_checks: int = 0
+    failed_checks: int = 0
+    unknown_checks: int = 0
+    table_results: list[ValidationResult] = field(default_factory=list)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status.value,
+            "total_checks": self.total_checks,
+            "passed_checks": self.passed_checks,
+            "failed_checks": self.failed_checks,
+            "unknown_checks": self.unknown_checks,
+            "table_results": [item.as_dict() for item in self.table_results],
+        }
 
 @dataclass
 class TableExecutionProgress:
@@ -94,6 +178,7 @@ class MigrationRun:
     validation_status: ValidationStatus = ValidationStatus.NOT_STARTED
     cutover_ready: bool = False
     rollback_ready: bool = False
+    validation_summary: ValidationSummary = field(default_factory=ValidationSummary)
     table_progress: list[TableExecutionProgress] = field(default_factory=list)
     last_checkpoint: str | None = None
     last_watermark: str | None = None
@@ -154,6 +239,7 @@ class MigrationRun:
             "validation_status": self.validation_status.value,
             "cutover_ready": self.cutover_ready,
             "rollback_ready": self.rollback_ready,
+            "validation_summary": self.validation_summary.as_dict(),
             "table_progress": [item.as_dict() for item in self.table_progress],
             "last_checkpoint": self.last_checkpoint,
             "last_watermark": self.last_watermark,
@@ -175,6 +261,33 @@ class MigrationRun:
             validation_status=ValidationStatus(data["validation_status"]),
             cutover_ready=data["cutover_ready"],
             rollback_ready=data["rollback_ready"],
+            validation_summary=ValidationSummary(
+                status=ValidationCheckStatus(data.get("validation_summary", {}).get("status", ValidationCheckStatus.UNKNOWN.value)),
+                total_checks=data.get("validation_summary", {}).get("total_checks", 0),
+                passed_checks=data.get("validation_summary", {}).get("passed_checks", 0),
+                failed_checks=data.get("validation_summary", {}).get("failed_checks", 0),
+                unknown_checks=data.get("validation_summary", {}).get("unknown_checks", 0),
+                table_results=[
+                    ValidationResult(
+                        table_name=item["table_name"],
+                        checks=[
+                            ValidationCheck(
+                                check_name=check["check_name"],
+                                query=check.get("query", ""),
+                                status=ValidationCheckStatus(check["status"]),
+                                table_name=check.get("table_name"),
+                                source_value=check.get("source_value"),
+                                target_value=check.get("target_value"),
+                                difference=check.get("difference"),
+                                threshold=check.get("threshold", 0.0),
+                                details=check.get("details"),
+                            )
+                            for check in item.get("checks", [])
+                        ],
+                    )
+                    for item in data.get("validation_summary", {}).get("table_results", [])
+                ],
+            ),
             table_progress=[
                 TableExecutionProgress(
                     table_name=item["table_name"],
@@ -208,7 +321,9 @@ _ALLOWED_TRANSITIONS: dict[MigrationRunStatus, set[MigrationRunStatus]] = {
     MigrationRunStatus.APPROVED: {MigrationRunStatus.PROVISIONING, MigrationRunStatus.FAILED},
     MigrationRunStatus.PROVISIONING: {MigrationRunStatus.BACKFILLING, MigrationRunStatus.FAILED},
     MigrationRunStatus.BACKFILLING: {MigrationRunStatus.VALIDATING, MigrationRunStatus.ROLLBACK_IN_PROGRESS, MigrationRunStatus.FAILED},
-    MigrationRunStatus.VALIDATING: {MigrationRunStatus.SYNCING, MigrationRunStatus.CUTOVER_READY, MigrationRunStatus.ROLLBACK_IN_PROGRESS, MigrationRunStatus.FAILED},
+    MigrationRunStatus.VALIDATING: {MigrationRunStatus.VALIDATION_PASSED, MigrationRunStatus.VALIDATION_FAILED, MigrationRunStatus.ROLLBACK_IN_PROGRESS, MigrationRunStatus.FAILED},
+    MigrationRunStatus.VALIDATION_PASSED: {MigrationRunStatus.SYNCING, MigrationRunStatus.CUTOVER_READY, MigrationRunStatus.ROLLBACK_IN_PROGRESS, MigrationRunStatus.FAILED},
+    MigrationRunStatus.VALIDATION_FAILED: {MigrationRunStatus.ROLLBACK_IN_PROGRESS, MigrationRunStatus.FAILED},
     MigrationRunStatus.SYNCING: {MigrationRunStatus.CUTOVER_READY, MigrationRunStatus.ROLLBACK_IN_PROGRESS, MigrationRunStatus.FAILED},
     MigrationRunStatus.CUTOVER_READY: {MigrationRunStatus.CUTOVER_COMPLETE, MigrationRunStatus.ROLLBACK_IN_PROGRESS, MigrationRunStatus.FAILED},
     MigrationRunStatus.CUTOVER_COMPLETE: set(),
@@ -223,6 +338,8 @@ _STATUS_TO_PHASE: dict[MigrationRunStatus, MigrationPhase] = {
     MigrationRunStatus.PROVISIONING: MigrationPhase.PROVISION,
     MigrationRunStatus.BACKFILLING: MigrationPhase.BACKFILL,
     MigrationRunStatus.VALIDATING: MigrationPhase.VALIDATE,
+    MigrationRunStatus.VALIDATION_PASSED: MigrationPhase.VALIDATE,
+    MigrationRunStatus.VALIDATION_FAILED: MigrationPhase.VALIDATE,
     MigrationRunStatus.SYNCING: MigrationPhase.SYNC,
     MigrationRunStatus.CUTOVER_READY: MigrationPhase.CUTOVER,
     MigrationRunStatus.CUTOVER_COMPLETE: MigrationPhase.COMPLETE,

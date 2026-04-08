@@ -7,6 +7,10 @@ from sdk.state.models import (
     MigrationRunStatus,
     TableExecutionProgress,
     TableExecutionStatus,
+    ValidationCheck,
+    ValidationCheckStatus,
+    ValidationResult,
+    ValidationSummary,
     ValidationStatus,
 )
 from sdk.state.store import JsonMigrationRunStore, MigrationRunStore
@@ -19,6 +23,10 @@ __all__ = [
     "MigrationRunStore",
     "TableExecutionProgress",
     "TableExecutionStatus",
+    "ValidationCheck",
+    "ValidationCheckStatus",
+    "ValidationResult",
+    "ValidationSummary",
     "ValidationStatus",
     "initialize_run_from_plan",
 ]
