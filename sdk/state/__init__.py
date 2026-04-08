@@ -2,6 +2,11 @@
 
 from sdk.state.helpers import initialize_run_from_plan
 from sdk.state.models import (
+    CDCCatchupReadiness,
+    CDCJobStatus,
+    CDCLagMetrics,
+    CDCTableProgress,
+    CDCTableStatus,
     MigrationPhase,
     MigrationRun,
     MigrationRunStatus,
@@ -18,6 +23,11 @@ from sdk.state.store import JsonMigrationRunStore, MigrationRunStore
 
 __all__ = [
     "JsonMigrationRunStore",
+    "CDCCatchupReadiness",
+    "CDCJobStatus",
+    "CDCLagMetrics",
+    "CDCTableProgress",
+    "CDCTableStatus",
     "MigrationPhase",
     "MigrationRun",
     "MigrationRunStatus",

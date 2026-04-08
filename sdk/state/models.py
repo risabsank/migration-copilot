@@ -82,6 +82,84 @@ class ValidationCheckStatus(str, Enum):
     FAILED = "failed"
     UNKNOWN = "unknown"
 
+class CDCJobStatus(str, Enum):
+    """Lifecycle status for an external CDC replication job."""
+
+    NOT_STARTED = "not_started"
+    STARTING = "starting"
+    RUNNING = "running"
+    DEGRADED = "degraded"
+    FAILED = "failed"
+    STOPPED = "stopped"
+
+
+class CDCTableStatus(str, Enum):
+    """Table-level CDC progress state."""
+
+    PENDING = "pending"
+    STARTING = "starting"
+    REPLICATING = "replicating"
+    CAUGHT_UP = "caught_up"
+    FAILED = "failed"
+    STOPPED = "stopped"
+
+
+@dataclass
+class CDCLagMetrics:
+    """Replication lag and freshness telemetry for one table."""
+
+    lag_seconds: float | None = None
+    source_freshness_seconds: float | None = None
+    observed_at: str = field(default_factory=lambda: utc_now_iso())
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class CDCCatchupReadiness:
+    """Catch-up gate result at table level."""
+
+    lag_threshold_seconds: float
+    stabilization_samples_required: int = 1
+    stabilization_samples_met: int = 0
+    ready: bool = False
+    ready_at: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class CDCTableProgress:
+    """Mutable table-level CDC replication state."""
+
+    table_name: str
+    status: CDCTableStatus = CDCTableStatus.PENDING
+    job_id: str | None = None
+    lag: CDCLagMetrics = field(default_factory=CDCLagMetrics)
+    readiness: CDCCatchupReadiness = field(default_factory=lambda: CDCCatchupReadiness(lag_threshold_seconds=30.0))
+    checkpoint: str | None = None
+    watermark: str | None = None
+    error_message: str | None = None
+    started_at: str | None = None
+    caught_up_at: str | None = None
+    updated_at: str = field(default_factory=lambda: utc_now_iso())
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "table_name": self.table_name,
+            "status": self.status.value,
+            "job_id": self.job_id,
+            "lag": self.lag.as_dict(),
+            "readiness": self.readiness.as_dict(),
+            "checkpoint": self.checkpoint,
+            "watermark": self.watermark,
+            "error_message": self.error_message,
+            "started_at": self.started_at,
+            "caught_up_at": self.caught_up_at,
+            "updated_at": self.updated_at,
+        }
 
 @dataclass
 class ValidationCheck:
@@ -204,6 +282,12 @@ class MigrationRun:
     last_watermark: str | None = None
     created_at: str = field(default_factory=lambda: utc_now_iso())
     updated_at: str = field(default_factory=lambda: utc_now_iso())
+    cdc_started_at: str | None = None
+    cdc_status: CDCJobStatus = CDCJobStatus.NOT_STARTED
+    cdc_table_progress: list[CDCTableProgress] = field(default_factory=list)
+    replication_lag_seconds: float | None = None
+    source_freshness_seconds: float | None = None
+    replication_checkpoint: str | None = None
 
     @classmethod
     def new(
@@ -225,6 +309,15 @@ class MigrationRun:
             selected_variant=selected_variant,
             pattern=pattern,
             table_progress=[TableExecutionProgress(table_name=name, updated_at=now) for name in table_names],
+            cdc_table_progress=[
+                CDCTableProgress(
+                    table_name=name,
+                    lag=CDCLagMetrics(observed_at=now),
+                    readiness=CDCCatchupReadiness(lag_threshold_seconds=30.0),
+                    updated_at=now,
+                )
+                for name in table_names
+            ],
             created_at=now,
             updated_at=now,
         )
@@ -245,6 +338,24 @@ class MigrationRun:
     def touch(self) -> None:
         """Refresh updated timestamp."""
         self.updated_at = utc_now_iso()
+    
+    def update_cutover_readiness(self) -> bool:
+        """Evaluate and persist whether this run is safe for cutover."""
+        all_cdc_tables_ready = bool(self.cdc_table_progress) and all(
+            item.readiness.ready for item in self.cdc_table_progress
+        )
+        validation_ready = self.validation_status == ValidationStatus.PASSED or self.status in {
+            MigrationRunStatus.VALIDATION_PASSED,
+            MigrationRunStatus.SYNCING,
+            MigrationRunStatus.CUTOVER_READY,
+        }
+        self.cutover_ready = (
+            validation_ready
+            and self.cdc_status in {CDCJobStatus.RUNNING, CDCJobStatus.DEGRADED}
+            and all_cdc_tables_ready
+        )
+        self.touch()
+        return self.cutover_ready
 
     def as_dict(self) -> dict[str, Any]:
         """Serialize run state into a JSON-friendly dictionary."""
@@ -268,6 +379,12 @@ class MigrationRun:
             "failed_phase": self.failed_phase,
             "last_checkpoint": self.last_checkpoint,
             "last_watermark": self.last_watermark,
+            "cdc_started_at": self.cdc_started_at,
+            "cdc_status": self.cdc_status.value,
+            "cdc_table_progress": [item.as_dict() for item in self.cdc_table_progress],
+            "replication_lag_seconds": self.replication_lag_seconds,
+            "source_freshness_seconds": self.source_freshness_seconds,
+            "replication_checkpoint": self.replication_checkpoint,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -338,6 +455,39 @@ class MigrationRun:
             failed_phase=data.get("failed_phase"),
             last_checkpoint=data.get("last_checkpoint"),
             last_watermark=data.get("last_watermark"),
+            cdc_started_at=data.get("cdc_started_at"),
+            cdc_status=CDCJobStatus(data.get("cdc_status", CDCJobStatus.NOT_STARTED.value)),
+            cdc_table_progress=[
+                CDCTableProgress(
+                    table_name=item["table_name"],
+                    status=CDCTableStatus(item.get("status", CDCTableStatus.PENDING.value)),
+                    job_id=item.get("job_id"),
+                    lag=CDCLagMetrics(
+                        lag_seconds=item.get("lag", {}).get("lag_seconds"),
+                        source_freshness_seconds=item.get("lag", {}).get("source_freshness_seconds"),
+                        observed_at=item.get("lag", {}).get("observed_at", utc_now_iso()),
+                    ),
+                    readiness=CDCCatchupReadiness(
+                        lag_threshold_seconds=item.get("readiness", {}).get("lag_threshold_seconds", 30.0),
+                        stabilization_samples_required=item.get("readiness", {}).get(
+                            "stabilization_samples_required", 1
+                        ),
+                        stabilization_samples_met=item.get("readiness", {}).get("stabilization_samples_met", 0),
+                        ready=item.get("readiness", {}).get("ready", False),
+                        ready_at=item.get("readiness", {}).get("ready_at"),
+                    ),
+                    checkpoint=item.get("checkpoint"),
+                    watermark=item.get("watermark"),
+                    error_message=item.get("error_message"),
+                    started_at=item.get("started_at"),
+                    caught_up_at=item.get("caught_up_at"),
+                    updated_at=item.get("updated_at", utc_now_iso()),
+                )
+                for item in data.get("cdc_table_progress", [])
+            ],
+            replication_lag_seconds=data.get("replication_lag_seconds"),
+            source_freshness_seconds=data.get("source_freshness_seconds"),
+            replication_checkpoint=data.get("replication_checkpoint"),
             created_at=data["created_at"],
             updated_at=data["updated_at"],
         )
