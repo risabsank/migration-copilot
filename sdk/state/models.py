@@ -288,6 +288,7 @@ class MigrationRun:
     replication_lag_seconds: float | None = None
     source_freshness_seconds: float | None = None
     replication_checkpoint: str | None = None
+    connector_config_metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def new(
@@ -385,6 +386,7 @@ class MigrationRun:
             "replication_lag_seconds": self.replication_lag_seconds,
             "source_freshness_seconds": self.source_freshness_seconds,
             "replication_checkpoint": self.replication_checkpoint,
+            "connector_config_metadata": self.connector_config_metadata,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -488,6 +490,7 @@ class MigrationRun:
             replication_lag_seconds=data.get("replication_lag_seconds"),
             source_freshness_seconds=data.get("source_freshness_seconds"),
             replication_checkpoint=data.get("replication_checkpoint"),
+            connector_config_metadata=dict(data.get("connector_config_metadata", {})),
             created_at=data["created_at"],
             updated_at=data["updated_at"],
         )

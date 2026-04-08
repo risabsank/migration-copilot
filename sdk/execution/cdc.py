@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from sdk.connectors import ResolvedConnectionSettings, configure_adapter_connections
 from sdk.observability import EventCollector
 from sdk.state.models import (
     CDCCatchupReadiness,
@@ -72,15 +73,20 @@ class CDCSyncService:
         adapter: CDCAdapter,
         store: MigrationRunStore,
         collector: EventCollector | None = None,
+        resolved_connections: ResolvedConnectionSettings | None = None,
         gate: CDCGate | None = None,
     ):
         self._adapter = adapter
         self._store = store
         self._collector = collector
+        self._resolved_connections = resolved_connections
         self._gate = gate or CDCGate()
 
     def initialize(self, *, run: MigrationRun, table_names: list[str]) -> MigrationRun:
         """Start CDC jobs for selected tables and persist run state."""
+        if self._resolved_connections is not None:
+            configure_adapter_connections(adapter=self._adapter, settings=self._resolved_connections)
+            
         if run.status == MigrationRunStatus.FAILED:
             raise RuntimeError("Cannot initialize CDC on a failed migration run")
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from sdk.connectors import ResolvedConnectionSettings, configure_adapter_connections
 from sdk.engine.models import ResolvedTablePlan
 from sdk.observability import EventCollector
 from sdk.state.models import MigrationRun, MigrationRunStatus, TableExecutionProgress, TableExecutionStatus, utc_now_iso
@@ -46,10 +47,12 @@ class BackfillExecutor:
         adapter: BackfillExecutionAdapter,
         store: MigrationRunStore,
         collector: EventCollector | None = None,
+        resolved_connections: ResolvedConnectionSettings | None = None,
     ):
         self._adapter = adapter
         self._store = store
         self._collector = collector
+        self._resolved_connections = resolved_connections
 
     def execute(
         self,
@@ -59,6 +62,9 @@ class BackfillExecutor:
         retry_failed: bool = False,
     ) -> MigrationRun:
         """Execute pending table backfills in deterministic dependency order."""
+        if self._resolved_connections is not None:
+            configure_adapter_connections(adapter=self._adapter, settings=self._resolved_connections)
+            
         if run.status == MigrationRunStatus.FAILED:
             raise RuntimeError("Cannot execute a failed migration run without explicit recovery")
 

@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 
 from sdk.adapters.contracts import ValidationAdapter
+from sdk.connectors import ResolvedConnectionSettings, configure_adapter_connections
 from sdk.observability import EventCollector
 from sdk.state.models import (
     MigrationRun,
@@ -46,14 +47,19 @@ class ValidationExecutor:
         adapter: ValidationAdapter,
         store: MigrationRunStore,
         collector: EventCollector | None = None,
+        resolved_connections: ResolvedConnectionSettings | None = None,
         gate: ValidationGate | None = None,
     ):
         self._adapter = adapter
         self._store = store
         self._collector = collector
+        self._resolved_connections = resolved_connections
         self._gate = gate or ValidationGate()
 
     def execute(self, *, run: MigrationRun, validations_sql: str) -> MigrationRun:
+        if self._resolved_connections is not None:
+            configure_adapter_connections(adapter=self._adapter, settings=self._resolved_connections)
+            
         if run.status == MigrationRunStatus.FAILED:
             raise RuntimeError("Cannot execute validations for a failed migration run")
 
