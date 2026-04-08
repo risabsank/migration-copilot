@@ -70,7 +70,11 @@ class TableExecutionProgress:
     checkpoint: str | None = None
     watermark: str | None = None
     error_message: str | None = None
+    chunks_completed: int = 0
+    started_at: str | None = None
+    completed_at: str | None = None
     updated_at: str = field(default_factory=lambda: utc_now_iso())
+    
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -179,6 +183,9 @@ class MigrationRun:
                     rows_copied=item["rows_copied"],
                     checkpoint=item.get("checkpoint"),
                     watermark=item.get("watermark"),
+                    chunks_completed=item.get("chunks_completed", 0),
+                    started_at=item.get("started_at"),
+                    completed_at=item.get("completed_at"),
                     error_message=item.get("error_message"),
                     updated_at=item["updated_at"],
                 )
