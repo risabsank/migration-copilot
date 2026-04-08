@@ -14,6 +14,14 @@ from sdk.execution.cdc import (
     CDCSyncService,
     FakeCDCAdapter,
 )
+from sdk.execution.sql_backfill import (
+    NonRetryableSqlAdapterError,
+    RetryableSqlAdapterError,
+    SQLBackfillExecutionAdapter,
+    SQLiteSourceAdapter,
+    SQLiteTargetAdapter,
+    TableSyncConfig,
+)
 from sdk.execution.validation import ValidationCheckSpec, ValidationExecutor, ValidationGate
 
 __all__ = [
@@ -27,6 +35,12 @@ __all__ = [
     "CDCSyncService",
     "FakeCDCAdapter",
     "SimulatedBackfillExecutionAdapter",
+    "NonRetryableSqlAdapterError",
+    "RetryableSqlAdapterError",
+    "SQLBackfillExecutionAdapter",
+    "SQLiteSourceAdapter",
+    "SQLiteTargetAdapter",
+    "TableSyncConfig",
     "ValidationCheckSpec",
     "ValidationExecutor",
     "ValidationGate",
