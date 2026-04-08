@@ -77,6 +77,7 @@ def test_migration_run_transition_sequence():
     run.transition_to(MigrationRunStatus.PROVISIONING)
     run.transition_to(MigrationRunStatus.BACKFILLING)
     run.transition_to(MigrationRunStatus.VALIDATING)
+    run.transition_to(MigrationRunStatus.VALIDATION_PASSED)
     run.transition_to(MigrationRunStatus.CUTOVER_READY)
 
     assert run.cutover_ready is True

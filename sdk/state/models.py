@@ -51,6 +51,21 @@ class MigrationPhase(str, Enum):
     ROLLBACK = "rollback"
     COMPLETE = "complete"
 
+class OrchestrationPhase(str, Enum):
+    """Ordered orchestration phases for full migration workflow."""
+
+    PLAN_READY = "plan_ready"
+    PROVISIONING = "provisioning"
+    PREFLIGHT_VALIDATION = "preflight_validation"
+    BACKFILL = "backfill"
+    POST_BACKFILL_VALIDATION = "post_backfill_validation"
+    CDC_START = "cdc_start"
+    CDC_CATCHUP = "cdc_catchup"
+    CUTOVER_PRECHECK = "cutover_precheck"
+    CUTOVER = "cutover"
+    POST_CUTOVER_VALIDATION = "post_cutover_validation"
+    COMPLETED = "completed"
+    ROLLBACK = "rollback"
 
 class ValidationStatus(str, Enum):
     """Validation status for the full migration run."""
@@ -180,6 +195,11 @@ class MigrationRun:
     rollback_ready: bool = False
     validation_summary: ValidationSummary = field(default_factory=ValidationSummary)
     table_progress: list[TableExecutionProgress] = field(default_factory=list)
+    orchestration_phase: OrchestrationPhase = OrchestrationPhase.PLAN_READY
+    completed_phases: list[str] = field(default_factory=list)
+    pause_requested: bool = False
+    paused: bool = False
+    failed_phase: str | None = None
     last_checkpoint: str | None = None
     last_watermark: str | None = None
     created_at: str = field(default_factory=lambda: utc_now_iso())
@@ -241,6 +261,11 @@ class MigrationRun:
             "rollback_ready": self.rollback_ready,
             "validation_summary": self.validation_summary.as_dict(),
             "table_progress": [item.as_dict() for item in self.table_progress],
+            "orchestration_phase": self.orchestration_phase.value,
+            "completed_phases": self.completed_phases,
+            "pause_requested": self.pause_requested,
+            "paused": self.paused,
+            "failed_phase": self.failed_phase,
             "last_checkpoint": self.last_checkpoint,
             "last_watermark": self.last_watermark,
             "created_at": self.created_at,
@@ -304,6 +329,13 @@ class MigrationRun:
                 )
                 for item in data["table_progress"]
             ],
+            orchestration_phase=OrchestrationPhase(
+                data.get("orchestration_phase", OrchestrationPhase.PLAN_READY.value)
+            ),
+            completed_phases=list(data.get("completed_phases", [])),
+            pause_requested=data.get("pause_requested", False),
+            paused=data.get("paused", False),
+            failed_phase=data.get("failed_phase"),
             last_checkpoint=data.get("last_checkpoint"),
             last_watermark=data.get("last_watermark"),
             created_at=data["created_at"],
