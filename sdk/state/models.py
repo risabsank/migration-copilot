@@ -442,6 +442,7 @@ class MigrationRun:
     connector_config_metadata: dict[str, Any] = field(default_factory=dict)
     cutover_evaluation: CutoverGateEvaluation = field(default_factory=CutoverGateEvaluation)
     cutover_execution: CutoverExecutionState = field(default_factory=CutoverExecutionState)
+    ops_recommendation_history: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def new(
@@ -543,6 +544,7 @@ class MigrationRun:
             "connector_config_metadata": self.connector_config_metadata,
             "cutover_evaluation": self.cutover_evaluation.as_dict(),
             "cutover_execution": self.cutover_execution.as_dict(),
+            "ops_recommendation_history": self.ops_recommendation_history,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -673,6 +675,7 @@ class MigrationRun:
                 error_message=data.get("cutover_execution", {}).get("error_message"),
                 recovery_path=data.get("cutover_execution", {}).get("recovery_path"),
             ),
+            ops_recommendation_history=list(data.get("ops_recommendation_history", [])),
             created_at=data["created_at"],
             updated_at=data["updated_at"],
         )
