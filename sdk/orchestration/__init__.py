@@ -10,6 +10,14 @@ from sdk.orchestration.execution_policy import (
     ExecutionPolicyProfile,
 )
 from sdk.orchestration.policy import PhaseTransitionPolicy
+from sdk.orchestration.scheduler_integration import (
+    PhaseTaskMapper,
+    SchedulerTaskExecutor,
+    SchedulerTaskSpec,
+    execute_scheduler_task,
+    generate_airflow_task_defs,
+    generate_dagster_job_defs,
+)
 from sdk.orchestration.service import MigrationOrchestrator
 from sdk.orchestration.supervisor import (
     DeterministicOpsPolicy,
@@ -39,4 +47,10 @@ __all__ = [
     "ApprovalDecision",
     "ExecutionAction",
     "ExecutionPolicyEngine",
+    "SchedulerTaskSpec",
+    "PhaseTaskMapper",
+    "SchedulerTaskExecutor",
+    "generate_airflow_task_defs",
+    "generate_dagster_job_defs",
+    "execute_scheduler_task",
 ]

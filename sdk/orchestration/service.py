@@ -42,13 +42,16 @@ class MigrationOrchestrator:
     rollback_runner: RollbackRunner | None = None
     execution_policy: ExecutionPolicyEngine = field(default_factory=ExecutionPolicyEngine)
 
-    def run(self, *, run_id: str) -> OrchestrationResult:
+    def run(self, *, run_id: str, max_phases: int | None = None) -> OrchestrationResult:
         """Start or continue orchestration from persisted migration run state."""
+        if max_phases is not None and max_phases <= 0:
+            raise ValueError("max_phases must be positive when provided")
         run = self._load_run(run_id)
         is_resume = bool(run.completed_phases)
         run.paused = False
         run.pause_requested = False
         self._store_run(run)
+        executed_phases = 0
 
         self._emit(
             event_type="orchestration_resumed" if is_resume else "orchestration_started",
@@ -92,6 +95,29 @@ class MigrationOrchestrator:
                     status="completed",
                     payload={"run_id": run.run_id, "phase": current_phase.value, "next_phase": next_phase.value},
                 )
+                executed_phases += 1
+                if (
+                    max_phases is not None
+                    and executed_phases >= max_phases
+                    and run.orchestration_phase not in {OrchestrationPhase.COMPLETED, OrchestrationPhase.ROLLBACK}
+                ):
+                    run.paused = True
+                    self._store_run(run)
+                    self._emit(
+                        event_type="orchestration_paused_at_boundary",
+                        status="paused",
+                        payload={
+                            "run_id": run.run_id,
+                            "checkpoint": run.last_checkpoint,
+                            "next_phase": run.orchestration_phase.value,
+                        },
+                    )
+                    return OrchestrationResult(
+                        final_status=OrchestrationFinalStatus.PAUSED,
+                        completed_phases=list(run.completed_phases),
+                        failed_phase=run.failed_phase,
+                        last_checkpoint=run.last_checkpoint,
+                    )
             except Exception as exc:
                 run.failed_phase = current_phase.value
                 run.last_checkpoint = current_phase.value
