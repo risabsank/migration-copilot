@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from sdk.engine.models import MigrationPattern
 
+PERSISTED_RUN_SCHEMA_VERSION = 2
 
 class MigrationRunStatus(str, Enum):
     """Lifecycle states for a migration execution run."""
@@ -602,6 +603,7 @@ class MigrationRun:
         """Serialize run state into a JSON-friendly dictionary."""
         return {
             "run_id": self.run_id,
+            "schema_version": PERSISTED_RUN_SCHEMA_VERSION,
             "plan_id": self.plan_id,
             "schema": self.schema,
             "selected_variant": self.selected_variant,
@@ -641,6 +643,7 @@ class MigrationRun:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "MigrationRun":
         """Hydrate a migration run from persisted dictionary content."""
+        _validate_run_payload(data)
         return cls(
             run_id=data["run_id"],
             plan_id=data["plan_id"],
@@ -772,6 +775,21 @@ class MigrationRun:
             updated_at=data["updated_at"],
         )
 
+def _validate_run_payload(data: dict[str, Any]) -> None:
+    """Validate required run payload fields before hydration."""
+    required_str_fields = ("run_id", "plan_id", "schema", "selected_variant", "pattern", "created_at", "updated_at")
+    for field_name in required_str_fields:
+        value = data.get(field_name)
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"Invalid migration run payload: '{field_name}' must be a non-empty string")
+
+    for bool_field in ("cutover_ready", "rollback_ready"):
+        if not isinstance(data.get(bool_field), bool):
+            raise ValueError(f"Invalid migration run payload: '{bool_field}' must be a boolean")
+
+    table_progress = data.get("table_progress")
+    if not isinstance(table_progress, list):
+        raise ValueError("Invalid migration run payload: 'table_progress' must be a list")
 
 def utc_now_iso() -> str:
     """Get a stable UTC timestamp string suitable for persistence."""

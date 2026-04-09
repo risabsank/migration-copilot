@@ -1,11 +1,11 @@
 {
-    "pattern": "backfill_plus_cdc",
+    "pattern": "phased",
     "rollback": [
         "Abort if critical validation checks fail.",
         "Abort if replication lag does not converge before cutover window.",
         "Abort if schema drift introduces incompatible DDL."
     ],
-    "selected_variant": "backfill_cdc_sync",
+    "selected_variant": "phased_cutover_by_domain_or_table_group",
     "table_plans": [
         {
             "chunk": 1000000,

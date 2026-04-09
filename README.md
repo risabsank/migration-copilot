@@ -73,13 +73,16 @@ If `DATABASE_URL` is missing, the script exits early with guidance.
 ### Current test command
 
 ```bash
+ruff check .
+mypy --explicit-package-bases sdk/state sdk/adapters sdk/observability.py tests/test_contracts_hardening.py tests/test_output_snapshots.py
 PYTHONPATH=. pytest -q
 ```
 
-### Current status
+Snapshot-specific checks:
 
-- There are no test files committed yet, so pytest exits with "no tests found" behavior.
-- `pytest.ini` points at a `tests` directory that does not currently exist.
+```bash
+PYTHONPATH=. pytest -q tests/test_snapshots.py tests/test_output_snapshots.py tests/test_contracts_hardening.py
+```
 
 ## Using this SDK in your own project
 
@@ -154,3 +157,10 @@ Without these, the code automatically uses a deterministic heuristic fallback cl
 - `examples/`: sample specs and generator examples
 - `main.py`: env-driven example entrypoint
 - `scope.md`: project scope and MVP spec
+
+## Production-readiness docs
+
+- Local execution: `docs/local-execution.md`
+- Production deployment model: `docs/production-deployment-model.md`
+- Adapter implementation guide: `docs/adapter-implementation-guide.md`
+- Operational lifecycle + recovery: `docs/operational-lifecycle-and-recovery.md`
