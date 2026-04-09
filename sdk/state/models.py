@@ -100,6 +100,24 @@ class CutoverExecutionStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
+class RollbackStatus(str, Enum):
+    """Lifecycle status for rollback planning and execution."""
+
+    NOT_PLANNED = "not_planned"
+    READY = "ready"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+
+class RollbackTriggerReason(str, Enum):
+    """Reason rollback execution was initiated."""
+
+    CUTOVER_FAILED = "cutover_failed"
+    POST_CUTOVER_VALIDATION_FAILED = "post_cutover_validation_failed"
+    PARTIAL_CUTOVER_DETECTED = "partial_cutover_detected"
+    OPERATOR_REQUESTED = "operator_requested"
+
 class CDCTableStatus(str, Enum):
     """Table-level CDC progress state."""
 
@@ -287,6 +305,85 @@ class CutoverExecutionState:
             "hook_trace": list(self.hook_trace),
             "error_message": self.error_message,
             "recovery_path": self.recovery_path,
+        }
+
+@dataclass
+class RollbackStep:
+    """Deterministic rollback step progress and checkpoints."""
+
+    step_id: str
+    description: str
+    status: RollbackStatus = RollbackStatus.READY
+    started_at: str | None = None
+    completed_at: str | None = None
+    checkpoint: str | None = None
+    details: str | None = None
+    error_message: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "step_id": self.step_id,
+            "description": self.description,
+            "status": self.status.value,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "checkpoint": self.checkpoint,
+            "details": self.details,
+            "error_message": self.error_message,
+        }
+
+
+@dataclass
+class RollbackPlan:
+    """Persisted rollback planning and execution audit state."""
+
+    status: RollbackStatus = RollbackStatus.NOT_PLANNED
+    trigger_reason: RollbackTriggerReason | None = None
+    initiated_at: str | None = None
+    completed_at: str | None = None
+    failed_at: str | None = None
+    resumed_count: int = 0
+    active_step_id: str | None = None
+    summary: str | None = None
+    operator_summary: str | None = None
+    steps: list[RollbackStep] = field(default_factory=list)
+    checkpoints: list[str] = field(default_factory=list)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status.value,
+            "trigger_reason": self.trigger_reason.value if self.trigger_reason else None,
+            "initiated_at": self.initiated_at,
+            "completed_at": self.completed_at,
+            "failed_at": self.failed_at,
+            "resumed_count": self.resumed_count,
+            "active_step_id": self.active_step_id,
+            "summary": self.summary,
+            "operator_summary": self.operator_summary,
+            "steps": [step.as_dict() for step in self.steps],
+            "checkpoints": list(self.checkpoints),
+        }
+
+
+@dataclass
+class RollbackReadinessState:
+    """Persisted evidence that rollback can be safely executed."""
+
+    ready: bool = False
+    status: RollbackStatus = RollbackStatus.NOT_PLANNED
+    established_at: str | None = None
+    strategy: str | None = None
+    checklist: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "ready": self.ready,
+            "status": self.status.value,
+            "established_at": self.established_at,
+            "strategy": self.strategy,
+            "checklist": list(self.checklist),
+            "notes": list(self.notes),
         }
 
 @dataclass

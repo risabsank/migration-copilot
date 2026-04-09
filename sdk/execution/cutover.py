@@ -11,6 +11,7 @@ from sdk.state.models import (
     CutoverGateEvaluation,
     MigrationRun,
     MigrationRunStatus,
+    RollbackTriggerReason,
     TableExecutionStatus,
     ValidationStatus,
     utc_now_iso,
@@ -47,6 +48,18 @@ class FinalValidationPackRunner(Protocol):
     def run_final_validation_pack(self, *, run: MigrationRun) -> bool:
         """Return True when final validation checks pass."""
 
+
+class RollbackRunner(Protocol):
+    """Rollback executor interface used for cutover failure recovery."""
+
+    def execute(
+        self,
+        *,
+        run_id: str,
+        trigger_reason: RollbackTriggerReason,
+        operator_summary: str | None = None,
+    ) -> MigrationRun:
+        """Execute rollback for a failed run."""
 
 class CutoverEvaluator:
     """Evaluates whether a run is ready for controlled cutover."""
@@ -151,12 +164,14 @@ class CutoverExecutor:
         adapter: CutoverOperationsAdapter,
         validation_runner: FinalValidationPackRunner,
         collector: EventCollector | None = None,
+        rollback_runner: RollbackRunner | None = None,
     ):
         self._store = store
         self._evaluator = evaluator
         self._adapter = adapter
         self._validation_runner = validation_runner
         self._collector = collector
+        self._rollback_runner = rollback_runner
 
     def execute(self, *, run_id: str, operator_note: str | None = None) -> MigrationRun:
         run = self._load(run_id)
@@ -257,6 +272,12 @@ class CutoverExecutor:
                     "recovery_path": state.recovery_path,
                 },
             )
+            if self._rollback_runner:
+                self._rollback_runner.execute(
+                    run_id=run.run_id,
+                    trigger_reason=RollbackTriggerReason.CUTOVER_FAILED,
+                    operator_summary="Rollback auto-triggered after cutover execution failure",
+                )
             raise
 
     def _load(self, run_id: str) -> MigrationRun:

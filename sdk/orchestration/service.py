@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Protocol
 
 from sdk.observability import EventCollector
 from sdk.orchestration.models import OrchestrationFinalStatus, OrchestrationResult
@@ -14,6 +14,18 @@ from sdk.state.store import MigrationRunStore
 PhaseHandler = Callable[[MigrationRun], None]
 
 
+class RollbackRunner(Protocol):
+    """Rollback executor interface used by orchestration failure policies."""
+
+    def execute(
+        self,
+        *,
+        run_id: str,
+        trigger_reason: RollbackTriggerReason,
+        operator_summary: str | None = None,
+    ) -> MigrationRun:
+        """Execute resumable rollback for a failed run."""
+
 @dataclass
 class MigrationOrchestrator:
     """Coordinates multi-phase migration execution using persisted run state."""
@@ -22,6 +34,7 @@ class MigrationOrchestrator:
     collector: EventCollector | None = None
     phase_handlers: dict[OrchestrationPhase, PhaseHandler] | None = None
     transition_policy: PhaseTransitionPolicy = PhaseTransitionPolicy()
+    rollback_runner: RollbackRunner | None = None
 
     def run(self, *, run_id: str) -> OrchestrationResult:
         """Start or continue orchestration from persisted migration run state."""
@@ -79,6 +92,21 @@ class MigrationOrchestrator:
                 if run.status != MigrationRunStatus.FAILED:
                     run.transition_to(MigrationRunStatus.FAILED)
                 self._store_run(run)
+                if self.rollback_runner and current_phase in {
+                    OrchestrationPhase.CUTOVER,
+                    OrchestrationPhase.POST_CUTOVER_VALIDATION,
+                }:
+                    reason = (
+                        RollbackTriggerReason.POST_CUTOVER_VALIDATION_FAILED
+                        if current_phase == OrchestrationPhase.POST_CUTOVER_VALIDATION
+                        else RollbackTriggerReason.CUTOVER_FAILED
+                    )
+                    self.rollback_runner.execute(
+                        run_id=run.run_id,
+                        trigger_reason=reason,
+                        operator_summary=f"Orchestration-triggered rollback after phase failure: {current_phase.value}",
+                    )
+                    run = self._load_run(run.run_id)
                 self._emit(
                     event_type="phase_failed",
                     status="failed",

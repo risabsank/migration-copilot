@@ -23,6 +23,12 @@ from sdk.execution.cutover import (
     FakeFinalValidationPackRunner,
     FinalValidationPackRunner,
 )
+from sdk.execution.rollback import (
+    FakeRollbackOperationsAdapter,
+    RollbackExecutor,
+    RollbackOperationsAdapter,
+    RollbackPolicy,
+)
 from sdk.execution.sql_backfill import (
     NonRetryableSqlAdapterError,
     RetryableSqlAdapterError,
@@ -50,6 +56,7 @@ __all__ = [
     "FakeCutoverOperationsAdapter",
     "FakeFinalValidationPackRunner",
     "FinalValidationPackRunner",
+    "FakeRollbackOperationsAdapter",
     "SimulatedBackfillExecutionAdapter",
     "NonRetryableSqlAdapterError",
     "RetryableSqlAdapterError",
@@ -60,4 +67,7 @@ __all__ = [
     "ValidationCheckSpec",
     "ValidationExecutor",
     "ValidationGate",
+    "RollbackExecutor",
+    "RollbackOperationsAdapter",
+    "RollbackPolicy",
 ]
