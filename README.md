@@ -164,3 +164,13 @@ Without these, the code automatically uses a deterministic heuristic fallback cl
 - Production deployment model: `docs/production-deployment-model.md`
 - Adapter implementation guide: `docs/adapter-implementation-guide.md`
 - Operational lifecycle + recovery: `docs/operational-lifecycle-and-recovery.md`
+
+## Operator GUI
+
+A lightweight operator UI is available via a stdlib HTTP API + React shell:
+
+```bash
+python -m sdk.control_plane.api
+```
+
+Then open `http://127.0.0.1:8000/`. See `docs/operator-gui.md` for details.
