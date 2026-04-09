@@ -8,6 +8,11 @@ from enum import Enum
 from typing import Any, Protocol
 
 from sdk.observability import EventCollector
+from sdk.orchestration.execution_policy import (
+    ApprovalState,
+    ExecutionAction,
+    ExecutionPolicyEngine,
+)
 from sdk.state.models import MigrationRun, OrchestrationPhase, ValidationCheckStatus
 from sdk.state.store import MigrationRunStore
 
@@ -221,6 +226,7 @@ class MigrationOpsSupervisor:
     collector: EventCollector | None = None
     review_client: ExecutionReviewClient = field(default_factory=HeuristicExecutionReviewClient)
     policy: DeterministicOpsPolicy = field(default_factory=DeterministicOpsPolicy)
+    execution_policy: ExecutionPolicyEngine = field(default_factory=ExecutionPolicyEngine)
 
     def review(self, review_input: ExecutionReviewInput) -> SupervisorDecision:
         payload = review_input.as_prompt_payload()
@@ -254,6 +260,62 @@ class MigrationOpsSupervisor:
             )
 
         decision = self.policy.evaluate(recommendation, run)
+        execution_action = _ACTION_MAPPING.get(decision.recommendation.recommended_action)
+        if execution_action and decision.accepted:
+            approval_decision = self.execution_policy.decide(
+                run=run,
+                action=execution_action,
+                phase=run.orchestration_phase,
+                actor="migration_ops_supervisor",
+            )
+            run.approval_history.append(approval_decision.as_dict())
+            self._emit(
+                event_type="approval_requested",
+                status="running",
+                payload={
+                    "run_id": run.run_id,
+                    "action": execution_action.value,
+                    "phase": run.orchestration_phase.value,
+                },
+            )
+            if approval_decision.state == ApprovalState.OVERRIDDEN:
+                self._emit(
+                    event_type="approval_overridden",
+                    status="warning",
+                    payload={
+                        "run_id": run.run_id,
+                        "action": execution_action.value,
+                        "phase": run.orchestration_phase.value,
+                    },
+                )
+            elif approval_decision.approved:
+                self._emit(
+                    event_type="approval_granted",
+                    status="completed",
+                    payload={
+                        "run_id": run.run_id,
+                        "action": execution_action.value,
+                        "phase": run.orchestration_phase.value,
+                    },
+                )
+            else:
+                self._emit(
+                    event_type="approval_denied",
+                    status="blocked",
+                    payload={
+                        "run_id": run.run_id,
+                        "action": execution_action.value,
+                        "phase": run.orchestration_phase.value,
+                    },
+                )
+                decision = SupervisorDecision(
+                    recommendation=decision.recommendation,
+                    disposition=RecommendationDisposition.BLOCKED_PENDING_HUMAN_REVIEW,
+                    accepted=False,
+                    policy_reasons=decision.policy_reasons
+                    + [f"Execution policy denied action {execution_action.value} pending human approval."],
+                    fallback_used=decision.fallback_used,
+                )
         if fallback_used:
             decision = SupervisorDecision(
                 recommendation=decision.recommendation,
@@ -302,3 +364,10 @@ def _parse_recommendation(data: dict[str, Any]) -> SupervisorRecommendation:
         risk_flags=[str(item) for item in data.get("risk_flags", [])],
         incident_note=str(data.get("incident_note", "")),
     )
+
+_ACTION_MAPPING: dict[SupervisorAction, ExecutionAction] = {
+    SupervisorAction.REDUCE_BACKFILL_CHUNK_SIZE: ExecutionAction.TUNE_CHUNK_SIZE,
+    SupervisorAction.RETRY_FAILED_TABLE: ExecutionAction.RETRY_FAILED_TABLE,
+    SupervisorAction.HOLD_CUTOVER: ExecutionAction.BEGIN_CUTOVER,
+    SupervisorAction.RECOMMEND_ROLLBACK: ExecutionAction.ROLLBACK,
+}

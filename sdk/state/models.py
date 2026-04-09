@@ -443,6 +443,9 @@ class MigrationRun:
     cutover_evaluation: CutoverGateEvaluation = field(default_factory=CutoverGateEvaluation)
     cutover_execution: CutoverExecutionState = field(default_factory=CutoverExecutionState)
     ops_recommendation_history: list[dict[str, Any]] = field(default_factory=list)
+    execution_policy_profile: str = "supervised"
+    phase_execution_policy_overrides: dict[str, str] = field(default_factory=dict)
+    approval_history: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def new(
@@ -545,6 +548,9 @@ class MigrationRun:
             "cutover_evaluation": self.cutover_evaluation.as_dict(),
             "cutover_execution": self.cutover_execution.as_dict(),
             "ops_recommendation_history": self.ops_recommendation_history,
+            "execution_policy_profile": self.execution_policy_profile,
+            "phase_execution_policy_overrides": self.phase_execution_policy_overrides,
+            "approval_history": self.approval_history,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -676,6 +682,9 @@ class MigrationRun:
                 recovery_path=data.get("cutover_execution", {}).get("recovery_path"),
             ),
             ops_recommendation_history=list(data.get("ops_recommendation_history", [])),
+            execution_policy_profile=data.get("execution_policy_profile", "supervised"),
+            phase_execution_policy_overrides=dict(data.get("phase_execution_policy_overrides", {})),
+            approval_history=list(data.get("approval_history", [])),
             created_at=data["created_at"],
             updated_at=data["updated_at"],
         )

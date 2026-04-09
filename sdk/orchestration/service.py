@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Protocol
 
 from sdk.observability import EventCollector
+from sdk.orchestration.execution_policy import (
+    ApprovalState,
+    ExecutionAction,
+    ExecutionPolicyEngine,
+)
 from sdk.orchestration.models import OrchestrationFinalStatus, OrchestrationResult
 from sdk.orchestration.policy import PhaseTransitionPolicy
-from sdk.state.models import MigrationRun, MigrationRunStatus, OrchestrationPhase
+from sdk.state.models import MigrationRun, MigrationRunStatus, OrchestrationPhase, RollbackTriggerReason
 from sdk.state.store import MigrationRunStore
 
 PhaseHandler = Callable[[MigrationRun], None]
@@ -35,6 +40,7 @@ class MigrationOrchestrator:
     phase_handlers: dict[OrchestrationPhase, PhaseHandler] | None = None
     transition_policy: PhaseTransitionPolicy = PhaseTransitionPolicy()
     rollback_runner: RollbackRunner | None = None
+    execution_policy: ExecutionPolicyEngine = field(default_factory=ExecutionPolicyEngine)
 
     def run(self, *, run_id: str) -> OrchestrationResult:
         """Start or continue orchestration from persisted migration run state."""
@@ -69,6 +75,7 @@ class MigrationOrchestrator:
             )
 
             try:
+                self._authorize_phase_action(run, current_phase)
                 self._execute_phase(run, current_phase)
                 run.last_checkpoint = current_phase.value
                 if current_phase.value not in run.completed_phases:
@@ -167,6 +174,50 @@ class MigrationOrchestrator:
 
     def _store_run(self, run: MigrationRun) -> MigrationRun:
         return self.store.save(run)
+
+    def _authorize_phase_action(self, run: MigrationRun, phase: OrchestrationPhase) -> None:
+        phase_to_action = {
+            OrchestrationPhase.BACKFILL: ExecutionAction.START_BACKFILL,
+            OrchestrationPhase.CDC_START: ExecutionAction.START_CDC,
+            OrchestrationPhase.CUTOVER: ExecutionAction.BEGIN_CUTOVER,
+            OrchestrationPhase.ROLLBACK: ExecutionAction.ROLLBACK,
+        }
+        action = phase_to_action.get(phase)
+        if action is None:
+            return
+
+        decision = self.execution_policy.decide(run=run, action=action, phase=phase, actor="migration_orchestrator")
+        run.approval_history.append(decision.as_dict())
+        self._store_run(run)
+
+        self._emit(
+            event_type="approval_requested",
+            status="running",
+            payload={"run_id": run.run_id, "action": action.value, "phase": phase.value},
+        )
+
+        if decision.state == ApprovalState.OVERRIDDEN:
+            self._emit(
+                event_type="approval_overridden",
+                status="warning",
+                payload={"run_id": run.run_id, "action": action.value, "phase": phase.value},
+            )
+            return
+
+        if decision.approved:
+            self._emit(
+                event_type="approval_granted",
+                status="completed",
+                payload={"run_id": run.run_id, "action": action.value, "phase": phase.value},
+            )
+            return
+
+        self._emit(
+            event_type="approval_denied",
+            status="blocked",
+            payload={"run_id": run.run_id, "action": action.value, "phase": phase.value, "reason": decision.reason},
+        )
+        raise PermissionError(f"Policy denied action {action.value}: {decision.reason}")
 
     def _emit(self, *, event_type: str, status: str, payload: dict[str, object]) -> None:
         if not self.collector:
