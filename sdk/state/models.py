@@ -262,6 +262,89 @@ class ValidationSummary:
         }
 
 @dataclass
+class MigrationSLOStatus:
+    """Snapshot of migration SLO compliance and breach details."""
+
+    status: str = "healthy"
+    breached_slos: list[str] = field(default_factory=list)
+    warning_slos: list[str] = field(default_factory=list)
+    validation_pass_rate: float = 1.0
+    validation_pass_rate_target: float = 0.99
+    cdc_lag_compliance_rate: float = 1.0
+    cdc_lag_compliance_target: float = 1.0
+    table_failure_rate: float = 0.0
+    table_failure_rate_target: float = 0.0
+    retry_count: int = 0
+    retry_count_target: int = 3
+    backfill_throughput_rows_per_minute: float | None = None
+    backfill_throughput_target_rows_per_minute: float = 100.0
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class RunHealthSnapshot:
+    """Operational health report derived from run state and event timeline."""
+
+    run_id: str
+    plan_id: str
+    captured_at: str = field(default_factory=lambda: utc_now_iso())
+    run_status: str = MigrationRunStatus.DRAFTED.value
+    current_phase: str = MigrationPhase.PREPARE.value
+    healthy: bool = True
+    summary: str = "Run is healthy."
+    slo_status: MigrationSLOStatus = field(default_factory=MigrationSLOStatus)
+    time_spent_per_phase_seconds: dict[str, float] = field(default_factory=dict)
+    impacted_tables: list[str] = field(default_factory=list)
+    latest_failure_cause: str | None = None
+    event_count: int = 0
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "run_id": self.run_id,
+            "plan_id": self.plan_id,
+            "captured_at": self.captured_at,
+            "run_status": self.run_status,
+            "current_phase": self.current_phase,
+            "healthy": self.healthy,
+            "summary": self.summary,
+            "slo_status": self.slo_status.as_dict(),
+            "time_spent_per_phase_seconds": dict(self.time_spent_per_phase_seconds),
+            "impacted_tables": list(self.impacted_tables),
+            "latest_failure_cause": self.latest_failure_cause,
+            "event_count": self.event_count,
+        }
+
+
+@dataclass
+class IncidentPack:
+    """Post-incident package for handoff to on-call and operational tooling."""
+
+    run_id: str
+    plan_id: str
+    generated_at: str = field(default_factory=lambda: utc_now_iso())
+    failure_cause_summary: str = "Unknown failure cause."
+    impacted_tables: list[str] = field(default_factory=list)
+    rollback_status: str = RollbackStatus.NOT_PLANNED.value
+    suggested_next_actions: list[str] = field(default_factory=list)
+    timeline: list[dict[str, Any]] = field(default_factory=list)
+    run_health_snapshot: RunHealthSnapshot | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "run_id": self.run_id,
+            "plan_id": self.plan_id,
+            "generated_at": self.generated_at,
+            "failure_cause_summary": self.failure_cause_summary,
+            "impacted_tables": list(self.impacted_tables),
+            "rollback_status": self.rollback_status,
+            "suggested_next_actions": list(self.suggested_next_actions),
+            "timeline": list(self.timeline),
+            "run_health_snapshot": self.run_health_snapshot.as_dict() if self.run_health_snapshot else None,
+        }
+
+@dataclass
 class CutoverGateEvaluation:
     """Persisted cutover gate check result."""
 
