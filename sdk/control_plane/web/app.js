@@ -5,7 +5,11 @@ import htm from 'https://esm.sh/htm@3.1.1';
 const html = htm.bind(React.createElement);
 
 const api = {
-    get: (path) => fetch(path).then((r) => r.json()),
+    get: (path) => fetch(path).then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Request failed');
+        return data;
+    }),
     post: (path, body = {}) => fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -31,11 +35,19 @@ function App() {
     const [error, setError] = useState('');
 
     const blockers = useMemo(() => run?.lifecycle?.blockers || [], [run]);
+    const tableProgress = run?.table_progress || [];
+    const validationSummary = run?.validation_summary || {};
+    const cutoverEvaluation = run?.cutover_evaluation || { blocking_conditions: [] };
+    const rollbackPlan = run?.rollback_plan || { status: 'unknown' };
+    const timeline = run?.timeline || [];
+    const approvalHistory = run?.approval_history || [];
+    const opsHistory = run?.ops_recommendation_history || [];
+    const dashboard = run?.dashboard || { health: { healthy: false, slo_status: { status: 'unknown' }, summary: 'n/a' }, table_completion: { completed: 0, total: 0 }, lag_seconds: 0 };
 
     async function loadRuns() {
         const data = await api.get('/api/runs');
-        setRuns(data);
-        if (!selectedRunId && data.length) setSelectedRunId(data[data.length - 1].run_id);
+        setRuns(Array.isArray(data) ? data : []);
+        if (!selectedRunId && Array.isArray(data) && data.length) setSelectedRunId(data[data.length - 1].run_id);
     }
 
     async function loadRunDetail(runId) {
@@ -43,6 +55,14 @@ function App() {
         const data = await api.get(`/api/runs/${runId}`);
         setRun(data);
     }
+
+    useEffect(() => {
+        loadRuns().catch((e) => setError(`Load runs failed: ${e.message}`));
+    }, []);
+
+    useEffect(() => {
+        loadRunDetail(selectedRunId).catch((e) => setError(`Load run detail failed: ${e.message}`));
+    }, [selectedRunId]);
 
     async function doAction(label, path, body = {}) {
         setError('');
@@ -127,7 +147,7 @@ function App() {
                   <table className="table">
                     <thead><tr><th>Table</th><th>Status</th><th>Rows copied</th><th>Progress</th><th>Action</th></tr></thead>
                     <tbody>
-                      ${run.table_progress.map((t) => html`<tr key=${t.table_name}>
+                      ${tableProgress.map((t) => html`<tr key=${t.table_name}>
                         <td>${t.table_name}</td>
                         <td><span className=${`badge ${statusClass(t.status)}`}>${t.status}</span></td>
                         <td>${t.rows_copied}</td>
@@ -139,16 +159,15 @@ function App() {
                 </div>
               </section>
 
-              <section className="section" id="validation"><h3>Validation results</h3><div>Total checks: ${run.validation_summary.total_checks} · Passed: ${run.validation_summary.passed_checks} · Failed: ${run.validation_summary.failed_checks}</div></section>
+              <section className="section" id="validation"><h3>Validation results</h3><div>Total checks: ${validationSummary.total_checks ?? 0} · Passed: ${validationSummary.passed_checks ?? 0} · Failed: ${validationSummary.failed_checks ?? 0}</div></section>
               <section className="section" id="cdc"><h3>CDC / catch-up status</h3><div className="grid"><div className="metric"><div className="metric-label">CDC status</div><div className="metric-value"><span className=${`badge ${statusClass(run.cdc_status)}`}>${run.cdc_status}</span></div></div><div className="metric"><div className="metric-label">Replication lag</div><div className="metric-value">${run.replication_lag_seconds ?? 'n/a'} sec</div></div><div className="metric"><div className="metric-label">Source freshness</div><div className="metric-value">${run.source_freshness_seconds ?? 'n/a'} sec</div></div></div></section>
-              <section className="section" id="cutover"><h3>Cutover readiness</h3><ul>${run.cutover_evaluation.blocking_conditions.map((b) => html`<li key=${b}>${b}</li>`)}</ul></section>
-              <section className="section" id="rollback"><h3>Rollback state</h3><div>Status: <span className=${`badge ${statusClass(run.rollback_plan.status)}`}>${run.rollback_plan.status}</span></div></section>
-              <section className="section" id="timeline"><h3>Event timeline / audit log</h3><div className="table-wrap"><table className="table"><thead><tr><th>Timestamp</th><th>Type</th><th>Description</th></tr></thead><tbody>${run.timeline.map((e, idx) => html`<tr key=${idx}><td>${e.timestamp}</td><td>${e.event_type}</td><td>${e.description}</td></tr>`)}</tbody></table></div></section>
-              <section className="section" id="approvals"><h3>Approvals / policy decisions</h3><pre>${JSON.stringify(run.approval_history, null, 2)}</pre></section>
-              <section className="section" id="ai"><h3>AI recommendation summary (advisory)</h3><pre>${JSON.stringify(run.ops_recommendation_history.slice(-3), null, 2)}</pre><div>Policy profile: <b>${run.execution_policy_profile}</b></div></section>
+              <section className="section" id="cutover"><h3>Cutover readiness</h3><ul>${(cutoverEvaluation.blocking_conditions || []).map((b) => html`<li key=${b}>${b}</li>`)}</ul></section>
+              <section className="section" id="rollback"><h3>Rollback state</h3><div>Status: <span className=${`badge ${statusClass(rollbackPlan.status)}`}>${rollbackPlan.status}</span></div></section>
+              <section className="section" id="timeline"><h3>Event timeline / audit log</h3><div className="table-wrap"><table className="table"><thead><tr><th>Timestamp</th><th>Type</th><th>Description</th></tr></thead><tbody>${timeline.map((e, idx) => html`<tr key=${idx}><td>${e.timestamp}</td><td>${e.event_type}</td><td>${e.description}</td></tr>`)}</tbody></table></div></section>
+              <section className="section" id="approvals"><h3>Approvals / policy decisions</h3><pre>${JSON.stringify(approvalHistory, null, 2)}</pre></section>
+              <section className="section" id="ai"><h3>AI recommendation summary (advisory)</h3><pre>${JSON.stringify(opsHistory.slice(-3), null, 2)}</pre><div>Policy profile: <b>${run.execution_policy_profile}</b></div></section>
               <section className="section" id="incident"><h3>Incident pack viewer</h3><button onClick=${async () => { const pack = await api.get(`/api/runs/${run.run_id}/incident-pack`); alert(`Incident: ${pack.failure_cause_summary}`); }}>Open incident summary</button></section>
-              <section className="section" id="dashboards"><h3>Monitoring dashboard</h3><div className="grid"><div className="metric">Health: <span className=${`badge ${run.dashboard.health.healthy ? 'ok' : 'err'}`}>${run.dashboard.health.slo_status.status}</span><div>${run.dashboard.health.summary}</div></div><div className="metric">Backfill completion<div className="progress"><span style=${{ width: `${(run.dashboard.table_completion.completed / Math.max(run.dashboard.table_completion.total, 1)) * 100}%` }}></span></div></div><div className="metric">CDC lag gauge<div className="progress"><span style=${{ width: `${Math.min(Number(run.dashboard.lag_seconds || 0), 300) / 3}%`, background: '#f59e0b' }}></span></div></div></div></section>
-            </>`}
+              <section className="section" id="dashboards"><h3>Monitoring dashboard</h3><div className="grid"><div className="metric">Health: <span className=${`badge ${dashboard.health.healthy ? 'ok' : 'err'}`}>${dashboard.health.slo_status.status}</span><div>${dashboard.health.summary}</div></div><div className="metric">Backfill completion<div className="progress"><span style=${{ width: `${(dashboard.table_completion.completed / Math.max(dashboard.table_completion.total, 1)) * 100}%` }}></span></div></div><div className="metric">CDC lag gauge<div className="progress"><span style=${{ width: `${Math.min(Number(dashboard.lag_seconds || 0), 300) / 3}%`, background: '#f59e0b' }}></span></div></div></div></section>            </>`}
           </main>
        </div>
     </div>`;

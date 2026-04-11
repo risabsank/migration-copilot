@@ -1,0 +1,25 @@
+{
+  "checksums": {
+    "ai/evaluation_metrics.json": "6af1350a0a96aa25d2e10c19e6684b9850d786febb04c5d8fcfb1d85924f482d",
+    "ai/explainability_trace.json": "f5fefe223e1f5ba4342b6086eafed77c6795609c6e720361a6982951d9d08645",
+    "ai/offline_benchmark.json": "d5bf1f49f82ae9473e3816b1cd5b1dbd7ac0544d3bd059d12c1b4a2d1983f3b8",
+    "backfill/customers.sql": "52ef39c9186fef959fdb983494600ae6cadecef973554d98216448b3da606d61",
+    "backfill/orders.sql": "ef6e51b912580f453b89e86d7b2e83229a140174c236864a98bc19fb143a1648",
+    "cdc/customers.debezium.yaml": "e9a2af015b58157c507c07c8901ae30a754015fd630b0e799a3120d023a878cb",
+    "cdc/customers.fivetran.yaml": "5d671094e9c709cfd3964234585780a91554f10b5e54f2da50374fb1e8620a34",
+    "cdc/customers.native.yaml": "e89e9dd573dd5883d08bf6c8c7a369af53d98a38413ae4c68cd83dabc4ef0c74",
+    "cdc/orders.debezium.yaml": "957c9497575bc730d031ff84c0fc0fe6bb12b5abe23a40150735731f587e0a09",
+    "cdc/orders.fivetran.yaml": "6bde059fcb8a4d3cc994d35d6741856842d4ffa3e8e978c751c0724e81c9d832",
+    "cdc/orders.native.yaml": "2edf22908398f03286fe4e0135df785c3b69fa671feb5167110a6dae78e50f1d",
+    "dags/airflow_dag.py": "24aa431574caf5176cdec3b2a2f0b8cc2a3d7b891b541c3bf55dbe7e69273059",
+    "dags/dagster_job.py": "2d65759c094e0b9f04e0ec784f9c6f3da3e67c781ffafcc1f7b29a503b1221b5",
+    "plan.json": "bb1e7acebeeb1b5b3a2a5acb9c0e9c6a99d99a015cd8f584f496aef96fb46508",
+    "runbook.md": "aa53dd469bc3e9d5114b8ea6749d355334f7eeafdb78c75fd65ee57b1386469b",
+    "sql_packs/validations_bigquery.sql": "7749c129d2acc5104ef6da6e8097b0579710dae2d8a03faeea77ed9cad28ada5",
+    "sql_packs/validations_postgres.sql": "633f8128e2a9e7de66e4a8243e94978578ecd19ba2b595d7e56320def1239837",
+    "sql_packs/validations_snowflake.sql": "0ec7d801a05882603d1cbfeb6871752d533cbdcd189e2d64309acde6b1aadc1f",
+    "transforms/stg_customers.sql": "fd291ce67eab474ed2bc45ecbfd0df967d6f90c9a0904a60e3dbb9f55a3619ee",
+    "transforms/stg_orders.sql": "ebdf0f52ca4dc0e56b5e64758a0c3a48fe0a52d74a61f0531f2693b66c342879",
+    "validations.sql": "633f8128e2a9e7de66e4a8243e94978578ecd19ba2b595d7e56320def1239837"
+  }
+}

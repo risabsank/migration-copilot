@@ -1,0 +1,8 @@
+{
+  "trace": [
+    "prompt_version=2026-04-01.v1",
+    "strategy=backfill_plus_cdc",
+    "review_fallback=False",
+    "override=none"
+  ]
+}

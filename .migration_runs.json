@@ -1,0 +1,142 @@
+{
+  "runs": {
+    "video-demo-run": {
+      "approval_history": [],
+      "cdc_started_at": null,
+      "cdc_status": "not_started",
+      "cdc_table_progress": [
+        {
+          "caught_up_at": null,
+          "checkpoint": null,
+          "error_message": null,
+          "job_id": null,
+          "lag": {
+            "lag_seconds": null,
+            "observed_at": "2026-04-11T21:28:15.756172+00:00",
+            "source_freshness_seconds": null
+          },
+          "readiness": {
+            "lag_threshold_seconds": 30.0,
+            "ready": false,
+            "ready_at": null,
+            "stabilization_samples_met": 0,
+            "stabilization_samples_required": 1
+          },
+          "started_at": null,
+          "status": "pending",
+          "table_name": "orders",
+          "updated_at": "2026-04-11T21:28:15.756172+00:00",
+          "watermark": null
+        },
+        {
+          "caught_up_at": null,
+          "checkpoint": null,
+          "error_message": null,
+          "job_id": null,
+          "lag": {
+            "lag_seconds": null,
+            "observed_at": "2026-04-11T21:28:15.756172+00:00",
+            "source_freshness_seconds": null
+          },
+          "readiness": {
+            "lag_threshold_seconds": 30.0,
+            "ready": false,
+            "ready_at": null,
+            "stabilization_samples_met": 0,
+            "stabilization_samples_required": 1
+          },
+          "started_at": null,
+          "status": "pending",
+          "table_name": "customers",
+          "updated_at": "2026-04-11T21:28:15.756172+00:00",
+          "watermark": null
+        }
+      ],
+      "completed_phases": [],
+      "connector_config_metadata": {},
+      "created_at": "2026-04-11T21:28:15.756172+00:00",
+      "cutover_evaluation": {
+        "advisory_warnings": [],
+        "blocking_conditions": [],
+        "evaluated_at": null,
+        "ready": false
+      },
+      "cutover_execution": {
+        "completed_at": null,
+        "error_message": null,
+        "failed_at": null,
+        "final_checkpoint": null,
+        "final_sync_completed_at": null,
+        "final_validation_completed_at": null,
+        "freeze_writes_at": null,
+        "hook_trace": [],
+        "operator_notes": [],
+        "recovery_path": null,
+        "started_at": null,
+        "status": "not_started"
+      },
+      "cutover_ready": false,
+      "execution_policy_profile": "supervised",
+      "failed_phase": null,
+      "last_checkpoint": null,
+      "last_watermark": null,
+      "ops_recommendation_history": [],
+      "orchestration_phase": "plan_ready",
+      "pattern": "backfill_plus_cdc",
+      "pause_requested": false,
+      "paused": false,
+      "phase": "prepare",
+      "phase_execution_policy_overrides": {},
+      "plan_id": "video-demo-plan",
+      "replication_checkpoint": null,
+      "replication_lag_seconds": null,
+      "rollback_ready": false,
+      "run_id": "video-demo-run",
+      "schema": "public",
+      "schema_version": 2,
+      "selected_variant": "backfill_cdc_sync",
+      "source_freshness_seconds": null,
+      "status": "drafted",
+      "table_progress": [
+        {
+          "checkpoint": null,
+          "chunks_completed": 0,
+          "completed_at": null,
+          "error_message": null,
+          "progress_percent": 0.0,
+          "rows_copied": 0,
+          "started_at": null,
+          "status": "pending",
+          "table_name": "orders",
+          "updated_at": "2026-04-11T21:28:15.756172+00:00",
+          "watermark": null
+        },
+        {
+          "checkpoint": null,
+          "chunks_completed": 0,
+          "completed_at": null,
+          "error_message": null,
+          "progress_percent": 0.0,
+          "rows_copied": 0,
+          "started_at": null,
+          "status": "pending",
+          "table_name": "customers",
+          "updated_at": "2026-04-11T21:28:15.756172+00:00",
+          "watermark": null
+        }
+      ],
+      "unresolved_risk_flags": [],
+      "updated_at": "2026-04-11T21:28:15.756269+00:00",
+      "validation_status": "not_started",
+      "validation_summary": {
+        "failed_checks": 0,
+        "passed_checks": 0,
+        "status": "unknown",
+        "table_results": [],
+        "total_checks": 0,
+        "unknown_checks": 0
+      }
+    }
+  },
+  "store_schema_version": 1
+}

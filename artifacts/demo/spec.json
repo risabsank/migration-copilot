@@ -1,0 +1,62 @@
+{
+  "source_type": "postgres",
+  "target_type": "snowflake",
+  "schema": "public",
+  "objects": [
+    "orders",
+    "customers"
+  ],
+  "downtime_minutes": 5,
+  "policy_profile": "conservative",
+  "cdc_supported": true,
+  "cdc_log_mode": "wal",
+  "tables": [
+    {
+      "name": "orders",
+      "row_estimate": 250000,
+      "size_bytes_estimate": 64000000,
+      "primary_key_columns": [
+        "id"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "customer_id",
+          "data_type": "bigint",
+          "nullable": false
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "customer_id",
+          "references_table": "customers",
+          "references_column": "id"
+        }
+      ]
+    },
+    {
+      "name": "customers",
+      "row_estimate": 100000,
+      "size_bytes_estimate": 12000000,
+      "primary_key_columns": [
+        "id"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "data_type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "email",
+          "data_type": "text",
+          "nullable": false
+        }
+      ]
+    }
+  ]
+}

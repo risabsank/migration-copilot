@@ -1,0 +1,5 @@
+table: customers
+enabled: false
+connector: debezium
+primary_key: ['id']
+watermark_column: TODO

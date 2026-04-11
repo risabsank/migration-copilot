@@ -1,0 +1,2 @@
+[console_scripts]
+migration-copilot = sdk.cli:main

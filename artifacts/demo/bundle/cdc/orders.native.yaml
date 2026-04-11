@@ -1,0 +1,5 @@
+table: orders
+enabled: false
+connector: native
+primary_key: ['id']
+watermark_column: TODO
