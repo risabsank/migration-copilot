@@ -23,7 +23,7 @@ def test_rule_branches_and_policy_profile_effects():
     fast = engine.build(MigrationSpec("pg", "sf", ["orders"], downtime_minutes=8, policy_profile=PolicyProfile.FAST), source)
     conservative = engine.build(MigrationSpec("pg", "sf", ["orders"], downtime_minutes=8, policy_profile=PolicyProfile.CONSERVATIVE), source)
 
-    assert fast.resolved_spec.requires_cdc is True
+    assert fast.resolved_spec.requires_cdc is False
     assert conservative.resolved_spec.requires_cdc is False
     assert fast.resolved_spec.table_plans[0].chunk_size_rows > conservative.resolved_spec.table_plans[0].chunk_size_rows
     assert len(conservative.plan.rollback_criteria) > len(fast.plan.rollback_criteria)

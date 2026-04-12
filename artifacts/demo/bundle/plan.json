@@ -1,0 +1,178 @@
+{
+  "spec": {
+    "source_type": "postgres",
+    "target_type": "snowflake",
+    "objects": [
+      "orders",
+      "customers"
+    ],
+    "downtime_minutes": 5,
+    "policy_profile": "conservative",
+    "low_bandwidth_mode": false,
+    "source_of_truth": "database"
+  },
+  "result": {
+    "resolved_spec": {
+      "pattern": "backfill_plus_cdc",
+      "requires_cdc": false,
+      "table_plans": [
+        {
+          "table_name": "customers",
+          "use_cdc": false,
+          "chunk_size_rows": 3000000,
+          "execution_order": 1,
+          "assumptions": [],
+          "criticality": "tier1",
+          "cutover_wave": 2
+        },
+        {
+          "table_name": "orders",
+          "use_cdc": false,
+          "chunk_size_rows": 3000000,
+          "execution_order": 2,
+          "assumptions": [],
+          "criticality": "tier0",
+          "cutover_wave": 1
+        }
+      ],
+      "assumptions": [],
+      "confidence": 0.98,
+      "confirm_with_team": [],
+      "decision_log": [
+        "downtime<=5m(profile-adjusted) => requires_cdc=True",
+        "mid downtime and cdc_supported => phased",
+        "cdc_readiness=ready",
+        "streaming_replay=skipped",
+        "fk_order_resolved => customers,orders",
+        "customers: cdc_not_required",
+        "customers: chunk_size=3000000",
+        "orders: cdc_not_required",
+        "orders: chunk_size=3000000"
+      ],
+      "risks": [],
+      "plan_variants": [
+        "batch_only",
+        "backfill_cdc_sync",
+        "phased_cutover_by_domain_or_table_group"
+      ],
+      "selected_variant": "backfill_cdc_sync",
+      "cdc_plan": {
+        "ready": true,
+        "log_mode": "wal",
+        "lag_gate_seconds": 90,
+        "lag_stabilization_minutes": 45,
+        "reprocessing_strategy": "Replay from checkpoint watermark and re-run idempotent upsert window.",
+        "dedupe_strategy": "Merge on primary key with event timestamp/version tie-breaker.",
+        "prerequisites": []
+      },
+      "streaming_replay_plan": null,
+      "phased_cutover_groups": [
+        [
+          "orders"
+        ],
+        [
+          "customers"
+        ]
+      ],
+      "ai_primary": true,
+      "ai_agent_notes": [
+        "strategy_agent: Heuristic strategy output.",
+        "risk_agent: Heuristic risk agent output.",
+        "review_agent: approved"
+      ],
+      "estimate": {
+        "estimated_duration_minutes": 15,
+        "peak_parallel_workers": 6,
+        "compute_credits": 0.1,
+        "notes": [
+          "Total volume 0.07 GB."
+        ]
+      },
+      "compliance_gates": [
+        {
+          "name": "SOX",
+          "passed": true,
+          "detail": "Change control and rollback criteria are present."
+        },
+        {
+          "name": "PII",
+          "passed": true,
+          "detail": "PII-like table names require masking policy approval."
+        },
+        {
+          "name": "retention",
+          "passed": true,
+          "detail": "Retention policy checkpoint included in runbook."
+        }
+      ],
+      "schema_contract": {
+        "backward_compatibility_score": 1.0,
+        "breaking_changes": [],
+        "warnings": []
+      },
+      "explainability_trace": [
+        "prompt_version=2026-04-01.v1",
+        "strategy=backfill_plus_cdc",
+        "review_fallback=False",
+        "override=none"
+      ]
+    },
+    "plan": {
+      "pattern": "backfill_plus_cdc",
+      "steps": [
+        {
+          "id": "prepare",
+          "stage": "prepare",
+          "depends_on": [],
+          "details": "Freeze schema contracts and configure connections."
+        },
+        {
+          "id": "backfill",
+          "stage": "backfill",
+          "depends_on": [
+            "prepare"
+          ],
+          "details": "Backfill tables in execution order with configured chunk sizes."
+        },
+        {
+          "id": "sync",
+          "stage": "sync",
+          "depends_on": [
+            "backfill"
+          ],
+          "details": "Run incremental sync/CDC until lag gates pass."
+        },
+        {
+          "id": "validate",
+          "stage": "validation",
+          "depends_on": [
+            "sync"
+          ],
+          "details": "Run row-count, aggregate, checksum, and FK integrity checks."
+        },
+        {
+          "id": "cutover",
+          "stage": "cutover",
+          "depends_on": [
+            "validate"
+          ],
+          "details": "Switch reads/writes to target after all validation gates pass."
+        },
+        {
+          "id": "phased-cutover-domains",
+          "stage": "cutover",
+          "depends_on": [
+            "cutover"
+          ],
+          "details": "Execute cutover in domain/table-group waves with per-wave validation gates."
+        }
+      ],
+      "rollback_criteria": [
+        "Abort if critical validation checks fail.",
+        "Abort if replication lag does not converge before cutover window.",
+        "Abort if any schema compatibility score is below 0.8.",
+        "Abort if schema drift introduces incompatible DDL."
+      ]
+    }
+  }
+}

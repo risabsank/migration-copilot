@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Migration Control Plane</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+</head>
+
+<body>
+    <div id="root"></div>
+    <script>
+        window.__uiBootError = (message) => {
+            const root = document.getElementById('root');
+            if (!root) return;
+            root.innerHTML = `<div style="padding:1rem;font-family:system-ui;color:#fee2e2;background:#7f1d1d;border:1px solid #991b1b;border-radius:8px;">
+          <strong>UI bootstrap failed</strong><div style="margin-top:.5rem;white-space:pre-wrap;">${message}</div></div>`;
+        };
+        window.addEventListener('error', (event) => {
+            if (event?.message) window.__uiBootError(event.message);
+        });
+        window.addEventListener('unhandledrejection', (event) => {
+            window.__uiBootError(event?.reason?.message || String(event?.reason || 'Unknown promise rejection'));
+        });
+    </script>
+    <script type="module" src="/static/app.js"></script>
+</body>
+
+</html>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -202,6 +203,10 @@ def _doctor_command(args: argparse.Namespace) -> int:
         else:
             checks.append(("pyyaml_installed", True, "PyYAML is installed"))
 
+    bundle_path = Path(args.bundle) if args.bundle else None
+    if bundle_path is not None:
+        _append_bundle_checks(checks, bundle_path)
+
     summary = {
         "ok": all(result for _, result, _ in checks),
         "checks": [
@@ -212,6 +217,119 @@ def _doctor_command(args: argparse.Namespace) -> int:
     print(json.dumps(summary, indent=2))
     return 0 if summary["ok"] else 1
 
+
+def _find_files(directory: Path, pattern: str) -> list[Path]:
+    if not directory.exists():
+        return []
+    return sorted(path for path in directory.glob(pattern) if path.is_file())
+
+
+def _contains_any(path: Path, tokens: list[str]) -> bool:
+    text = path.read_text(encoding="utf-8")
+    return any(token in text for token in tokens)
+
+
+def _is_default_signing_key(value: str) -> bool:
+    normalized = value.strip().lower()
+    return normalized in {"", "dev", "development", "changeme", "default", "test"}
+
+
+def _append_bundle_checks(checks: list[tuple[str, bool, str]], bundle_path: Path) -> None:
+    checks.append(("bundle_exists", bundle_path.exists(), f"Bundle path exists at {bundle_path}"))
+    if not bundle_path.exists():
+        return
+
+    cdc_files = _find_files(bundle_path / "cdc", "*.yaml")
+    if cdc_files:
+        unresolved = [path for path in cdc_files if _contains_any(path, ["watermark_column: TODO"])]
+        checks.append(
+            (
+                "cdc_watermark_column_resolved",
+                not unresolved,
+                (
+                    "All CDC YAML files define a real watermark_column"
+                    if not unresolved
+                    else "Resolve watermark_column TODOs in: " + ", ".join(path.name for path in unresolved)
+                ),
+            )
+        )
+
+    backfill_files = _find_files(bundle_path / "backfill", "*.sql")
+    if backfill_files:
+        unresolved = [path for path in backfill_files if _contains_any(path, ["source.<table>", "target.<table>"])]
+        checks.append(
+            (
+                "backfill_identifiers_resolved",
+                not unresolved,
+                (
+                    "All backfill SQL files reference real source/target identifiers"
+                    if not unresolved
+                    else "Replace source.<table>/target.<table> placeholders in: "
+                    + ", ".join(path.name for path in unresolved)
+                ),
+            )
+        )
+
+    validations_path = bundle_path / "validations.sql"
+    if validations_path.exists():
+        unresolved = _contains_any(validations_path, ["source.", "target."])
+        checks.append(
+            (
+                "validation_identifiers_reviewed",
+                not unresolved,
+                (
+                    "Validation SQL appears environment-specific"
+                    if not unresolved
+                    else "Update environment-specific source/target references in validations.sql"
+                ),
+            )
+        )
+
+    transform_files = _find_files(bundle_path / "transforms", "stg_*.sql")
+    if transform_files:
+        unresolved = [path for path in transform_files if _contains_any(path, ["select * from source_data"])]
+        checks.append(
+            (
+                "transform_models_customized",
+                not unresolved,
+                (
+                    "Transform models include custom projection logic"
+                    if not unresolved
+                    else "Replace staging model stubs with business logic in: "
+                    + ", ".join(path.name for path in unresolved)
+                ),
+            )
+        )
+
+    dag_paths = [bundle_path / "dags" / "airflow_dag.py", bundle_path / "dags" / "dagster_job.py"]
+    existing_dags = [path for path in dag_paths if path.exists()]
+    if existing_dags:
+        unresolved = [path for path in existing_dags if _contains_any(path, ["EmptyOperator", "@op", "return '"])]
+        checks.append(
+            (
+                "orchestration_dags_customized",
+                not unresolved,
+                (
+                    "Orchestration DAGs appear to contain real tasks and logic"
+                    if not unresolved
+                    else "Replace orchestration stubs and placeholders in: "
+                    + ", ".join(path.name for path in unresolved)
+                ),
+            )
+        )
+
+    signing_key = os.environ.get("MIGRATION_COPILOT_SIGNING_KEY")
+    checks.append(
+        (
+            "signing_key_configured",
+            bool(signing_key) and not _is_default_signing_key(signing_key),
+            (
+                "MIGRATION_COPILOT_SIGNING_KEY is set and not a known dev/default value"
+                if signing_key and not _is_default_signing_key(signing_key)
+                else "Set MIGRATION_COPILOT_SIGNING_KEY from a secure secret manager value"
+            ),
+        )
+    )
 
 def _base_template() -> dict[str, Any]:
     return {
@@ -305,6 +423,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor_parser = subparsers.add_parser("doctor", help="Run preflight checks for a smooth first-run experience")
     doctor_parser.add_argument("--spec", required=False, help="Optional path to a spec YAML/JSON file for validation")
+    doctor_parser.add_argument(
+        "--bundle",
+        required=False,
+        help="Optional artifact bundle path to check unresolved migration templates and key management",
+    )
     doctor_parser.set_defaults(func=_doctor_command)
 
     init_parser = subparsers.add_parser(

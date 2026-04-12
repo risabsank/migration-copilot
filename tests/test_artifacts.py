@@ -15,7 +15,6 @@ from sdk.engine.models import (
     ResolvedSpec,
     ResolvedTablePlan,
     SchemaContractReport,
-    SourceProfile,
     TableProfile,
 )
 

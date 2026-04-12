@@ -1,0 +1,13 @@
+{
+  "suite": "baseline-v1",
+  "cases": [
+    {
+      "name": "low_downtime_cdc",
+      "expected_pattern": "backfill_plus_cdc"
+    },
+    {
+      "name": "high_downtime_batch",
+      "expected_pattern": "big_bang"
+    }
+  ]
+}

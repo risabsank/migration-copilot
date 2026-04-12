@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-from pathlib import Path
 
 from sdk.adapters.postgres_metadata import PostgresMetadataAdapter
 from sdk.copilot import MigrationCopilot

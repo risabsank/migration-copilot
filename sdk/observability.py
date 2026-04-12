@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+PLAN_EVENT_SCHEMA_VERSION = 1
 
 def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -25,6 +26,7 @@ class PlanEvent:
 
     def as_dict(self) -> dict[str, Any]:
         data = {
+            "schema_version": PLAN_EVENT_SCHEMA_VERSION,
             "event_type": self.event_type,
             "plan_id": self.plan_id,
             "step": self.step,

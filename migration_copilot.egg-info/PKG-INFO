@@ -1,3 +1,17 @@
+Metadata-Version: 2.4
+Name: migration-copilot
+Version: 0.7.0
+Summary: Deterministic migration planning SDK with artifact packaging
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: PyYAML>=6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: ruff>=0.6.0; extra == "dev"
+Requires-Dist: mypy>=1.11.0; extra == "dev"
+Provides-Extra: yaml
+Requires-Dist: PyYAML>=6.0; extra == "yaml"
+
 # Migration Copilot
 
 A Python SDK that generates **deterministic, plan-only** migration bundles for relational database to warehouse migrations.

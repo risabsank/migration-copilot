@@ -1,0 +1,12 @@
+{
+    "pattern": "backfill_plus_cdc",
+    "spec": {
+        "downtime_minutes": null,
+        "objects": [
+            "users"
+        ],
+        "policy_profile": "balanced",
+        "source_type": "postgres",
+        "target_type": "snowflake"
+    }
+}

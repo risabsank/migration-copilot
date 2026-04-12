@@ -1,0 +1,5 @@
+table: orders
+enabled: false
+connector: fivetran
+primary_key: ['id']
+watermark_column: TODO

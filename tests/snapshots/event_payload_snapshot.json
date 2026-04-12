@@ -1,0 +1,16 @@
+{
+    "confidence": 0.91,
+    "event_type": "agent_step",
+    "payload": {
+        "selected_variant": "backfill_cdc_sync",
+        "step_count": 4
+    },
+    "plan_id": "plan-123",
+    "rule_ids": [
+        "plan_dag_builder"
+    ],
+    "schema_version": 1,
+    "status": "completed",
+    "step": "strategy_planner",
+    "ts_utc": "2026-01-01T00:00:00+00:00"
+}
