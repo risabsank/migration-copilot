@@ -1,48 +1,89 @@
 # Migration Copilot
 
-A Python SDK that generates **deterministic, plan-only** migration bundles for relational database to warehouse migrations.
+Migration Copilot is a **deterministic migration planning SDK** for relational-to-warehouse modernization programs.
 
-The SDK discovers table metadata through adapters, resolves constraints, builds a migration plan, and writes artifacts (plan JSON, runbook, SQL templates, CDC templates, and an event log).
+It helps teams convert migration intent into a reproducible artifact bundle (plan, runbook, SQL templates, CDC config stubs, governance outputs, and event logs) that can be reviewed, versioned, and executed in your existing delivery platform.
 
-## Project overview
+---
 
-### What this repository currently provides
+## Why Migration Copilot
 
-- `MigrationCopilot` facade API to generate migration plans from a `MigrationSpec` and metadata adapter.
-- CLI command (`migration-copilot plan`) that consumes a JSON/YAML spec file and emits a bundle.
-- Reference Postgres metadata adapter.
-- AI-first multi-agent planner with deterministic fallback heuristic.
-- Artifact generator for runbooks, validation SQL, backfill SQL stubs, dbt transform stubs, and CDC configs.
+Large-scale data migrations often fail due to inconsistent planning, unclear ownership, and non-repeatable execution prep. Migration Copilot addresses this by providing:
 
-### High-level flow
+- **Deterministic planning**: same spec + metadata yields the same planning output.
+- **Auditability**: generated `events.jsonl` and governance artifacts support operational traceability.
+- **Reusable scaffolding**: produces templates for backfill, validation, CDC, transforms, and orchestration handoff.
+- **Extensibility**: adapter contracts let you plug in custom metadata sources and runtime integrations.
 
-1. Build `MigrationSpec`.
-2. Discover metadata from a `MetadataAdapter`.
-3. Resolve constraints and pick strategy pattern.
-4. Build migration DAG + rollback criteria.
-5. Generate artifact bundle.
-6. Emit auditable event log (`events.jsonl`).
+---
 
-## Quickstart
+## Core capabilities
 
-### Prerequisites
+- Facade API (`MigrationCopilot`) to build migration plans from a `MigrationSpec`.
+- CLI workflows for day-1 to day-2 operations:
+  - `init-spec`: bootstrap a starter migration spec.
+  - `doctor`: run preflight checks on spec and artifact readiness.
+  - `plan`: generate a complete migration artifact bundle.
+- Static metadata adapter for JSON/YAML-driven planning in CI and local environments.
+- Postgres metadata adapter reference implementation.
+- Multi-agent planning pathway with deterministic fallback behavior.
+- Operator control plane API + lightweight web UI for plan monitoring and lifecycle control.
+
+---
+
+## Architecture at a glance
+
+1. **Specification intake** (`MigrationSpec` via JSON/YAML or SDK).
+2. **Metadata discovery** (adapter contract).
+3. **Constraint and dependency analysis** (rule engine + planning models).
+4. **Variant selection** (strategy and confidence scoring).
+5. **Artifact packaging** (SQL, runbook, CDC, DAG scaffolds, governance signatures/checksums).
+6. **Execution handoff** (integrate into your orchestrator, connector stack, and CI/CD).
+
+---
+
+## Installation
+
+### Requirements
 
 - Python 3.10+
-- `pip`
+- pip
 
-### Install for local development
+### Install
 
 ```bash
 python -m pip install -e .
 ```
 
-### Generate a migration plan from example spec
+For YAML spec support (if needed in other environments):
 
 ```bash
-python -m sdk.cli plan --spec examples/spec.json --out ./artifacts/demo
+python -m pip install "migration-copilot[yaml]"
 ```
 
-You should get a JSON summary on stdout and these generated outputs under `./artifacts/demo`:
+---
+
+## Quickstart (CLI)
+
+### 1) Create a starter spec
+
+```bash
+migration-copilot init-spec --template postgres_snowflake --out ./examples/my-spec.json
+```
+
+### 2) Validate the setup and spec
+
+```bash
+migration-copilot doctor --spec ./examples/my-spec.json
+```
+
+### 3) Generate a migration bundle
+
+```bash
+migration-copilot plan --spec ./examples/my-spec.json --out ./artifacts/demo
+```
+
+Expected outputs include:
 
 - `plan.json`
 - `runbook.md`
@@ -50,10 +91,13 @@ You should get a JSON summary on stdout and these generated outputs under `./art
 - `backfill/*.sql`
 - `transforms/stg_*.sql`
 - `cdc/*.yaml`
+- `dags/*.py`
+- `governance/*`
 - `events.jsonl`
 
-## Run with a real Postgres source
+---
 
+<<<<<<< HEAD
 `main.py` uses environment variables and the Postgres metadata adapter.
 
 ```bash
@@ -102,6 +146,9 @@ Your adapter must implement:
 - `describe_table(table_name: str, schema: str) -> TableMetadata`
 
 ### 3) Create and run the copilot
+=======
+## SDK usage (embedded in your platform)
+>>>>>>> 9cf7b28 (updated README)
 
 ```python
 from sdk.copilot import MigrationCopilot
@@ -117,39 +164,67 @@ spec = MigrationSpec(
     policy_profile=PolicyProfile.CONSERVATIVE,
 )
 
-output = copilot.plan(spec=spec, schema="public", output_dir="./artifacts/my-plan")
+output = copilot.plan(
+    spec=spec,
+    schema="public",
+    cdc_supported=True,
+    cdc_log_mode="wal",
+    output_dir="./artifacts/my-plan",
+)
+
 print(output.result.as_dict())
 print(output.runbook_markdown)
 ```
 
-### 4) Integrate generated artifacts into your runtime/orchestration
+---
 
-This project only plans and scaffolds migration artifacts. You still need to wire generated SQL/YAML/templates into your execution platform (Airflow, Dagster, dbt, connector tooling, CI/CD, etc.).
+## Reusability and extension model
 
-## What is still missing to run this as a full migration solution
+Migration Copilot is designed as a planning layer you can adapt across teams and migration programs.
 
-This repository intentionally focuses on planning and scaffolding. To run migrations end-to-end in production, you still need:
+### 1) Adapter extensibility
 
-1. **Execution/orchestration layer** (e.g., Airflow/Dagster jobs).
-2. **Secrets and connector configuration management**.
-3. **Production CDC connector wiring** (`cdc/*.yaml` contains TODO placeholders).
-4. **Automated test suite** (unit + snapshot tests are referenced in spec docs but not present).
-5. **CI pipeline and quality gates** for linting/tests/snapshots.
-6. **Schema contracts and validation execution plumbing** (currently only SQL templates are generated).
-7. **Operational monitoring + alerting integration** (lag/error SLO dashboards and alerts).
+Implement `MetadataAdapter` for your source system:
 
-## Optional LLM configuration
+- `list_tables(schema: str) -> list[str]`
+- `describe_table(table_name: str, schema: str) -> TableMetadata`
 
-The planner can call an OpenAI-compatible endpoint if configured:
+This allows reuse with any catalog/metadata source (live DB, schema registry, exported manifests, etc.).
+
+### 2) Orchestrator integration
+
+Generated artifact bundles can be consumed by:
+
+- Airflow
+- Dagster
+- dbt-driven flows
+- Internal workflow engines
+
+Use generated DAG and SQL files as scaffolding, then replace placeholders with production logic.
+
+### 3) Policy-driven rollout
+
+Tune execution posture via `policy_profile` and operational constraints (`downtime_minutes`, `cdc_supported`, etc.) to reuse the same framework for conservative and aggressive migration tracks.
+
+### 4) Governance and promotion
+
+Bundle signatures/checksums support gated promotion from development to staging to production in CI/CD.
+
+---
+
+## LLM / planning configuration
+
+Migration Copilot can use an OpenAI-compatible endpoint when configured:
 
 - `MIGRATION_COPILOT_LLM_ENDPOINT`
 - `MIGRATION_COPILOT_LLM_API_KEY`
-- `MIGRATION_COPILOT_LLM_MODEL` (default: `gpt-4o-mini`)
+- `MIGRATION_COPILOT_LLM_MODEL` (default behavior falls back when not configured)
 
-Without these, the code automatically uses a deterministic heuristic fallback client.
+If unset, deterministic planning fallback paths remain available.
 
-## Repository layout
+---
 
+<<<<<<< HEAD
 - `sdk/`: core package
   - `engine/`: planning logic and models
   - `adapters/`: adapter contracts and Postgres adapter
@@ -168,9 +243,67 @@ Without these, the code automatically uses a deterministic heuristic fallback cl
 ## Operator GUI
 
 A lightweight operator UI is available via a stdlib HTTP API + React shell:
+=======
+## Operator control plane
+
+Run the control plane API locally:
+>>>>>>> 9cf7b28 (updated README)
 
 ```bash
 python -m sdk.control_plane.api
 ```
 
+<<<<<<< HEAD
 Then open `http://127.0.0.1:8000/`. See `docs/operator-gui.md` for details.
+=======
+Then open:
+
+- `http://127.0.0.1:8000/`
+
+See `docs/operator-gui.md` for workflow details.
+
+---
+
+## Project structure
+
+- `sdk/`
+  - `engine/` - planning models, rule engine, validation, agent interfaces
+  - `adapters/` - adapter contracts and implementations
+  - `artifacts/` - bundle assembly and artifact emitters
+  - `execution/` - cutover, backfill, rollback, validation helpers
+  - `orchestration/` - policy, supervisor, service/scheduler integration
+  - `control_plane/` - API service and web assets
+  - `state/`, `operations/`, `connectors/` - runtime state and ops integrations
+- `examples/` - sample specs and generation helpers
+- `artifacts/demo/` - sample generated bundle
+- `docs/` - deployment, local execution, adapter and operator guides
+
+---
+
+## Development workflow
+
+Run baseline checks:
+
+```bash
+ruff check .
+PYTHONPATH=. pytest -q
+```
+
+Optional type checking:
+
+```bash
+mypy --explicit-package-bases sdk/state sdk/adapters sdk/observability.py tests/test_contracts.py tests/test_output_snapshots.py
+```
+
+---
+
+## Production adoption notes
+
+Migration Copilot is intentionally strongest at **planning and packaging**. For full production migration execution, pair it with:
+
+- Managed secrets and key rotation
+- CDC connector provisioning and monitoring
+- Data quality and reconciliation execution pipelines
+- Incident response automation and rollback operations
+- Environment-specific SLO/SLA monitoring and alerting
+>>>>>>> 9cf7b28 (updated README)
