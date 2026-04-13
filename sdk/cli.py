@@ -187,6 +187,7 @@ def _doctor_command(args: argparse.Namespace) -> int:
                 checks.append(("spec_valid", False, f"Spec validation failed: {exc}"))
             else:
                 checks.append(("spec_valid", True, "Spec parsed and passed basic validation"))
+                _append_security_spec_checks(checks, spec_doc)
 
     requires_yaml = bool(spec_path and spec_path.suffix.lower() in {".yml", ".yaml"})
     if requires_yaml:
@@ -331,6 +332,95 @@ def _append_bundle_checks(checks: list[tuple[str, bool, str]], bundle_path: Path
         )
     )
 
+def _append_security_spec_checks(checks: list[tuple[str, bool, str]], spec_doc: dict[str, Any]) -> None:
+    security = spec_doc.get("security")
+    if not isinstance(security, dict):
+        checks.append(
+            (
+                "security_profile_present",
+                False,
+                "Add a `security` section to the spec (access_roles, encryption, auditability, residency, retention).",
+            )
+        )
+        return
+
+    checks.append(("security_profile_present", True, "Spec includes a security profile section"))
+
+    access_roles = security.get("access_roles", {})
+    required_roles = {"source_reader", "target_writer", "validation_runner", "cutover_approver"}
+    missing_roles = sorted(role for role in required_roles if not str(access_roles.get(role, "")).strip())
+    checks.append(
+        (
+            "security_access_roles_defined",
+            not missing_roles,
+            (
+                "All required migration access roles are defined"
+                if not missing_roles
+                else "Define missing access_roles entries: " + ", ".join(missing_roles)
+            ),
+        )
+    )
+
+    encryption = security.get("encryption", {})
+    required_encryption_flags = {"at_rest", "in_transit", "staging", "logs_redacted"}
+    missing_encryption = sorted(flag for flag in required_encryption_flags if encryption.get(flag) is not True)
+    checks.append(
+        (
+            "security_encryption_controls_enabled",
+            not missing_encryption,
+            (
+                "Encryption/redaction controls are enabled for all required data planes"
+                if not missing_encryption
+                else "Set encryption controls to true for: " + ", ".join(missing_encryption)
+            ),
+        )
+    )
+
+    auditability = security.get("auditability", {})
+    required_audit_fields = {"record_what", "record_who", "record_when", "record_validations"}
+    missing_audit_fields = sorted(field for field in required_audit_fields if auditability.get(field) is not True)
+    checks.append(
+        (
+            "security_auditability_controls_enabled",
+            not missing_audit_fields,
+            (
+                "Auditability controls are enabled for migration evidence collection"
+                if not missing_audit_fields
+                else "Set auditability controls to true for: " + ", ".join(missing_audit_fields)
+            ),
+        )
+    )
+
+    residency = security.get("residency", {})
+    allowed_regions = residency.get("allowed_regions")
+    has_regions = isinstance(allowed_regions, list) and any(str(region).strip() for region in allowed_regions)
+    checks.append(
+        (
+            "security_residency_regions_defined",
+            has_regions,
+            (
+                "Residency allowed_regions are defined"
+                if has_regions
+                else "Define at least one region under security.residency.allowed_regions"
+            ),
+        )
+    )
+
+    retention = security.get("retention", {})
+    staging_ttl_hours = retention.get("staging_ttl_hours")
+    has_ttl = isinstance(staging_ttl_hours, int) and staging_ttl_hours > 0
+    checks.append(
+        (
+            "security_staging_ttl_defined",
+            has_ttl,
+            (
+                f"Staging TTL is configured to {staging_ttl_hours} hours"
+                if has_ttl
+                else "Set security.retention.staging_ttl_hours to a positive integer"
+            ),
+        )
+    )
+
 def _base_template() -> dict[str, Any]:
     return {
         "source_type": "postgres",
@@ -341,6 +431,32 @@ def _base_template() -> dict[str, Any]:
         "policy_profile": "conservative",
         "cdc_supported": True,
         "cdc_log_mode": "wal",
+        "security": {
+            "access_roles": {
+                "source_reader": "migration_source_reader",
+                "target_writer": "migration_target_writer",
+                "validation_runner": "migration_validation_runner",
+                "cutover_approver": "migration_cutover_approver",
+            },
+            "encryption": {
+                "at_rest": True,
+                "in_transit": True,
+                "staging": True,
+                "logs_redacted": True,
+            },
+            "auditability": {
+                "record_what": True,
+                "record_who": True,
+                "record_when": True,
+                "record_validations": True,
+            },
+            "retention": {
+                "staging_ttl_hours": 24,
+            },
+            "residency": {
+                "allowed_regions": ["us-east-1"],
+            },
+        },
         "tables": [
             {
                 "name": "orders",
